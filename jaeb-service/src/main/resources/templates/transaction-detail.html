@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction Detail — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>
+            <a th:href="@{/ui/transactions}" style="text-decoration:none;color:var(--gray-400)">&larr;</a>
+            &nbsp;Transaction Detail
+        </h1>
+        <div class="topbar-right">
+            <span class="badge"
+                  th:classappend="${txn.status.name() == 'PARSED' || txn.status.name() == 'ACKNOWLEDGED' || txn.status.name() == 'DELIVERED'} ? 'badge-success' : (${txn.status.name() == 'FAILED' || txn.status.name() == 'ERROR'} ? 'badge-danger' : 'badge-warning')"
+                  th:text="${txn.status}" style="font-size:.82rem;padding:5px 14px"></span>
+        </div>
+    </div>
+    <div class="content">
+
+        <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+        <!-- Overview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3>Overview</h3>
+            </div>
+            <div class="card-body">
+                <dl class="detail-grid">
+                    <dt>Tracking ID</dt><dd class="mono" th:text="${txn.transactionId}"></dd>
+                    <dt>Transaction Type</dt><dd><span class="badge badge-primary" th:text="${txn.transactionType}"></span></dd>
+                    <dt>Direction</dt><dd th:text="${txn.direction}"></dd>
+                    <dt>Source</dt><dd><span class="badge badge-gray" th:text="${txn.source}"></span></dd>
+                    <dt>Partner</dt><dd th:text="${txn.partnerId != null ? txn.partnerId : '—'}"></dd>
+                    <dt>Source File</dt><dd th:text="${txn.sourceFileName != null ? txn.sourceFileName : '—'}"></dd>
+                    <dt>Processed At</dt><dd th:text="${txn.processedAt != null ? #temporals.format(txn.processedAt, 'yyyy-MM-dd HH:mm:ss') : ''}"></dd>
+                    <dt>Parse Time</dt><dd th:text="${txn.parseTimeMs} + ' ms'"></dd>
+                    <dt>Segments</dt><dd th:text="${txn.segmentCount}"></dd>
+                    <dt>Valid</dt>
+                    <dd>
+                        <span th:if="${txn.valid}" class="badge badge-success">Yes</span>
+                        <span th:unless="${txn.valid}" class="badge badge-danger">No</span>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Envelope -->
+        <div class="card mb-4" th:if="${txn.senderIsaId != null || txn.interchangeControlNumber != null}">
+            <div class="card-header"><h3>ISA / GS Envelope</h3></div>
+            <div class="card-body">
+                <dl class="detail-grid">
+                    <dt>Sender ISA</dt><dd class="mono" th:text="${txn.senderIsaId != null ? txn.senderIsaId : '—'}"></dd>
+                    <dt>Receiver ISA</dt><dd class="mono" th:text="${txn.receiverIsaId != null ? txn.receiverIsaId : '—'}"></dd>
+                    <dt>ISA Control #</dt><dd class="mono" th:text="${txn.interchangeControlNumber != null ? txn.interchangeControlNumber : '—'}"></dd>
+                    <dt>GS Control #</dt><dd class="mono" th:text="${txn.groupControlNumber != null ? txn.groupControlNumber : '—'}"></dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Validation Errors -->
+        <div class="card mb-4" th:if="${txn.validationErrors != null}">
+            <div class="card-header"><h3>Validation Errors (<span th:text="${txn.validationErrorCount}"></span>)</h3></div>
+            <div class="card-body">
+                <div class="alert alert-danger" th:text="${txn.validationErrors}"></div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div class="card mb-4" th:if="${txn.errorMessage != null}">
+            <div class="card-header"><h3>Error</h3></div>
+            <div class="card-body">
+                <div class="alert alert-danger" th:text="${txn.errorMessage}"></div>
+            </div>
+        </div>
+
+        <!-- 997 Acknowledgement -->
+        <div class="card mb-4" th:if="${txn.edi997Content != null}">
+            <div class="card-header">
+                <h3>997 Acknowledgement</h3>
+                <div class="flex gap-2 items-center">
+                    <span class="badge badge-success" th:text="'AK9=' + ${txn.acknowledgeCode}"></span>
+                    <span class="badge" th:classappend="${txn.edi997Delivered} ? 'badge-success' : 'badge-warning'"
+                          th:text="${txn.edi997Delivered} ? 'Delivered' : 'Pending'"></span>
+                </div>
+            </div>
+            <div class="card-body">
+                <dl class="detail-grid" style="margin-bottom:16px">
+                    <dt>997 Control #</dt><dd class="mono" th:text="${txn.edi997ControlNumber}"></dd>
+                    <dt>Delivered At</dt><dd th:text="${txn.edi997DeliveredAt != null ? #temporals.format(txn.edi997DeliveredAt, 'yyyy-MM-dd HH:mm:ss') : 'Pending'}"></dd>
+                </dl>
+                <div class="code-block" th:text="${txn.edi997Content}"></div>
+            </div>
+        </div>
+
+        <!-- Raw EDI -->
+        <div class="card mb-4" th:if="${txn.rawEdiContent != null}">
+            <div class="card-header"><h3>Raw EDI Content</h3></div>
+            <div class="card-body">
+                <div class="code-block" th:text="${txn.rawEdiContent}"></div>
+            </div>
+        </div>
+
+        <!-- Parsed JSON -->
+        <div class="card mb-4" th:if="${txn.parsedJson != null}">
+            <div class="card-header"><h3>Parsed JSON</h3></div>
+            <div class="card-body">
+                <div class="code-block" th:text="${txn.parsedJson}"></div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2 mt-4" style="margin-top:16px">
+            <form th:if="${txn.rawEdiContent != null}"
+                  th:action="@{/ui/transactions/{id}/reprocess(id=${txn.transactionId})}"
+                  method="post" style="display:inline"
+                  onsubmit="return confirm('Re-parse this EDI transaction?')">
+                <button type="submit" class="btn btn-primary btn-sm">&#8635; Reprocess</button>
+            </form>
+            <a th:if="${txn.rawEdiContent != null}"
+               th:href="@{/ui/transactions/{id}/download(id=${txn.transactionId})}"
+               class="btn btn-outline btn-sm">&#8615; Download Raw EDI</a>
+            <a th:if="${txn.edi997Content != null}"
+               th:href="@{/ui/transactions/{id}/download997(id=${txn.transactionId})}"
+               class="btn btn-outline btn-sm">&#8615; Download 997</a>
+        </div>
+
+    </div>
+</div>
+</body>
+</html>

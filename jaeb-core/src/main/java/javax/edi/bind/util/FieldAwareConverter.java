@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
+import javax.edi.bind.EDIMessageException;
 import javax.edi.bind.annotations.elements.EDIElementFormat;
 import javax.edi.bind.annotations.elements.EDIElementFormats;
 import javax.edi.bind.annotations.elements.EDILocale;
@@ -231,5 +232,42 @@ public class FieldAwareConverter {
 		}
 		//return (T)converter.convert(val);
 		return (T)converter.convert(targetType,val);		
+	}
+	
+	/**
+	 * Validates an object against its JSR-303 validation annotations (STRICT MODE).
+	 * This method delegates to EDIValidationUtil and throws on error.
+	 * 
+	 * @param <T> the type of object to validate
+	 * @param object the object to validate
+	 * @throws EDIMessageException if validation fails
+	 */
+	public static <T> void validateObject(T object) throws EDIMessageException {
+		EDIValidationUtil.validate(object);
+	}
+	
+	/**
+	 * Validates an object and collects all errors (LENIENT MODE).
+	 * Does NOT throw an exception. Returns validation result with all errors.
+	 * 
+	 * @param <T> the type of object to validate
+	 * @param object the object to validate
+	 * @return ValidationResult containing all validation errors
+	 */
+	public static <T> EDIValidationError.ValidationResult validateObjectLenient(T object) {
+		return EDIValidationUtil.validateAndCollectErrors(object);
+	}
+	
+	/**
+	 * Validates an object and collects all errors with segment information (LENIENT MODE).
+	 * 
+	 * @param <T> the type of object to validate
+	 * @param object the object to validate
+	 * @param segmentTag the EDI segment tag
+	 * @param lineNumber the line number in the EDI message
+	 * @return ValidationResult containing all validation errors with segment information
+	 */
+	public static <T> EDIValidationError.ValidationResult validateObjectLenient(T object, String segmentTag, int lineNumber) {
+		return EDIValidationUtil.validateAndCollectErrors(object, segmentTag, lineNumber);
 	}
 }

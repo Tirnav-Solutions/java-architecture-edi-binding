@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${isEdit} ? 'Edit Channel' : 'Add Channel'">Channel — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>
+            <a th:href="@{/ui/partners/{id}(id=${partnerId})}" style="text-decoration:none;color:var(--gray-400)">&larr;</a>
+            &nbsp;<span th:text="${isEdit} ? 'Edit Communication Channel' : 'Add Communication Channel'"></span>
+        </h1>
+    </div>
+    <div class="content">
+        <div class="card">
+            <div class="card-header"><h3>Channel Configuration</h3></div>
+            <div class="card-body">
+                <form th:action="${isEdit} ? @{/ui/channels/{id}/edit(id=${channel.id})} : @{/ui/partners/{id}/channels/new(id=${partnerId})}"
+                      method="post">
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Channel Name *</label>
+                            <input type="text" name="channelName" th:value="${channel.channelName}"
+                                   required placeholder="e.g. Walmart SFTP Inbound">
+                        </div>
+                        <div class="form-group">
+                            <label>Protocol *</label>
+                            <select name="protocol" id="protocolSelect" onchange="toggleProtocolFields()">
+                                <option value="SFTP" th:selected="${channel.protocol?.name() == 'SFTP'}">SFTP</option>
+                                <option value="FTP" th:selected="${channel.protocol?.name() == 'FTP'}">FTP</option>
+                                <option value="AS2" th:selected="${channel.protocol?.name() == 'AS2'}">AS2</option>
+                                <option value="HTTP" th:selected="${channel.protocol?.name() == 'HTTP'}">HTTP</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Direction *</label>
+                            <select name="direction">
+                                <option value="INBOUND" th:selected="${channel.direction?.name() == 'INBOUND'}">Inbound (receive)</option>
+                                <option value="OUTBOUND" th:selected="${channel.direction?.name() == 'OUTBOUND'}">Outbound (send)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="status">
+                                <option value="ACTIVE" th:selected="${channel.status?.name() == 'ACTIVE'}">Active</option>
+                                <option value="DISABLED" th:selected="${channel.status?.name() == 'DISABLED'}">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- ===== SFTP / FTP Fields ===== -->
+                    <div id="sftpFields">
+                        <div class="form-group full" style="margin-top:20px">
+                            <label style="font-size:.85rem;font-weight:700;color:var(--gray-800)">
+                                <span id="protocolLabel">SFTP</span> Connection
+                            </label>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Host</label>
+                                <input type="text" name="host" th:value="${channel.host}" placeholder="sftp.partner.com">
+                            </div>
+                            <div class="form-group">
+                                <label>Port</label>
+                                <input type="number" name="port" th:value="${channel.port}" placeholder="22">
+                            </div>
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" name="username" th:value="${channel.username}">
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password" name="password" th:value="${channel.password}">
+                            </div>
+                            <div class="form-group">
+                                <label>Remote Directory</label>
+                                <input type="text" name="remoteDirectory" th:value="${channel.remoteDirectory}" placeholder="/edi/inbound">
+                            </div>
+                            <div class="form-group">
+                                <label>Archive Directory</label>
+                                <input type="text" name="archiveDirectory" th:value="${channel.archiveDirectory}" placeholder="/edi/archive">
+                            </div>
+                            <div class="form-group">
+                                <label>File Pattern</label>
+                                <input type="text" name="filePattern" th:value="${channel.filePattern}" placeholder="*.edi">
+                            </div>
+                            <div class="form-group" id="ftpOptions" style="display:none">
+                                <label>FTP Options</label>
+                                <label style="font-weight:400;font-size:.82rem">
+                                    <input type="checkbox" name="passiveMode" th:checked="${channel.passiveMode}"> Passive Mode
+                                </label>
+                                <label style="font-weight:400;font-size:.82rem">
+                                    <input type="checkbox" name="useTls" th:checked="${channel.useTls}"> Use TLS (FTPS)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== AS2 Fields ===== -->
+                    <div id="as2Fields" style="display:none">
+                        <div class="form-group full" style="margin-top:20px">
+                            <label style="font-size:.85rem;font-weight:700;color:var(--gray-800)">AS2 Configuration</label>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Local AS2 ID</label>
+                                <input type="text" name="as2LocalId" th:value="${channel.as2LocalId}" placeholder="MY-AS2-ID">
+                            </div>
+                            <div class="form-group">
+                                <label>Partner AS2 ID</label>
+                                <input type="text" name="as2PartnerId" th:value="${channel.as2PartnerId}" placeholder="PARTNER-AS2-ID">
+                            </div>
+                            <div class="form-group full">
+                                <label>AS2 Endpoint URL</label>
+                                <input type="text" name="as2Url" th:value="${channel.as2Url}" placeholder="https://partner.com/as2/receive">
+                            </div>
+                            <div class="form-group">
+                                <label>MDN Mode</label>
+                                <select name="as2MdnMode">
+                                    <option value="SYNC" th:selected="${channel.as2MdnMode == 'SYNC'}">Synchronous</option>
+                                    <option value="ASYNC" th:selected="${channel.as2MdnMode == 'ASYNC'}">Asynchronous</option>
+                                    <option value="NONE" th:selected="${channel.as2MdnMode == 'NONE'}">None</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>MIC Algorithm</label>
+                                <select name="as2MicAlgorithm">
+                                    <option value="SHA-256" th:selected="${channel.as2MicAlgorithm == 'SHA-256'}">SHA-256</option>
+                                    <option value="SHA-1" th:selected="${channel.as2MicAlgorithm == 'SHA-1'}">SHA-1</option>
+                                    <option value="SHA-384" th:selected="${channel.as2MicAlgorithm == 'SHA-384'}">SHA-384</option>
+                                    <option value="SHA-512" th:selected="${channel.as2MicAlgorithm == 'SHA-512'}">SHA-512</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Encryption Algorithm</label>
+                                <select name="as2EncryptionAlgorithm">
+                                    <option value="AES256" th:selected="${channel.as2EncryptionAlgorithm == 'AES256'}">AES-256</option>
+                                    <option value="AES128" th:selected="${channel.as2EncryptionAlgorithm == 'AES128'}">AES-128</option>
+                                    <option value="3DES" th:selected="${channel.as2EncryptionAlgorithm == '3DES'}">3DES</option>
+                                    <option value="NONE" th:selected="${channel.as2EncryptionAlgorithm == 'NONE'}">None</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Security Options</label>
+                                <label style="font-weight:400;font-size:.82rem">
+                                    <input type="checkbox" name="as2SignMessages" th:checked="${channel.as2SignMessages}"> Sign messages
+                                </label>
+                                <label style="font-weight:400;font-size:.82rem">
+                                    <input type="checkbox" name="as2EncryptMessages" th:checked="${channel.as2EncryptMessages}"> Encrypt messages
+                                </label>
+                                <label style="font-weight:400;font-size:.82rem">
+                                    <input type="checkbox" name="as2RequestSignedMdn" th:checked="${channel.as2RequestSignedMdn}"> Request signed MDN
+                                </label>
+                            </div>
+                            <div class="form-group full">
+                                <label>Our Certificate (PEM)</label>
+                                <textarea name="as2LocalCertificate" th:text="${channel.as2LocalCertificate}"
+                                          rows="6" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                                          style="font-family:monospace;font-size:.78rem"></textarea>
+                                <small style="color:var(--gray-400)">Used for signing outbound messages and MDNs. Share this with the trading partner.</small>
+                            </div>
+                            <div class="form-group full">
+                                <label>Our Private Key (PEM)</label>
+                                <textarea name="as2LocalPrivateKey" th:text="${channel.as2LocalPrivateKey}"
+                                          rows="6" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                                          style="font-family:monospace;font-size:.78rem"></textarea>
+                                <small style="color:var(--gray-400)">Used for decrypting inbound messages and signing MDNs. Keep this secret.</small>
+                            </div>
+                            <div class="form-group full">
+                                <label>Partner Certificate (PEM)</label>
+                                <textarea name="as2PartnerCertificate" th:text="${channel.as2PartnerCertificate}"
+                                          rows="6" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                                          style="font-family:monospace;font-size:.78rem"></textarea>
+                                <small style="color:var(--gray-400)">Used for verifying inbound signatures and encrypting outbound messages.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== HTTP Fields ===== -->
+                    <div id="httpFields" style="display:none">
+                        <div class="form-group full" style="margin-top:20px">
+                            <label style="font-size:.85rem;font-weight:700;color:var(--gray-800)">HTTP / Webhook Configuration</label>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group full">
+                                <label>Endpoint URL</label>
+                                <input type="text" name="httpUrl" th:value="${channel.httpUrl}" placeholder="https://partner.com/api/edi/receive">
+                            </div>
+                            <div class="form-group">
+                                <label>HTTP Method</label>
+                                <select name="httpMethod">
+                                    <option value="POST" th:selected="${channel.httpMethod == 'POST'}">POST</option>
+                                    <option value="PUT" th:selected="${channel.httpMethod == 'PUT'}">PUT</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Content-Type</label>
+                                <input type="text" name="httpContentType" th:value="${channel.httpContentType}" placeholder="application/edi-x12">
+                            </div>
+                            <div class="form-group full">
+                                <label>Authorization Header</label>
+                                <input type="text" name="httpAuthHeader" th:value="${channel.httpAuthHeader}" placeholder="Bearer eyJ... or Basic dXNl...">
+                            </div>
+                            <div class="form-group full">
+                                <label>Custom Headers (JSON)</label>
+                                <input type="text" name="httpCustomHeaders" th:value="${channel.httpCustomHeaders}" placeholder='{"X-Custom": "value"}'>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== Scheduling ===== -->
+                    <div class="form-group full" style="margin-top:20px">
+                        <label style="font-size:.85rem;font-weight:700;color:var(--gray-800)">Scheduling</label>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Poll Interval (ms)</label>
+                            <input type="number" name="pollIntervalMs" th:value="${channel.pollIntervalMs}" placeholder="300000 (5 min)">
+                        </div>
+                        <div class="form-group">
+                            <label>Connection Timeout (ms)</label>
+                            <input type="number" name="connectionTimeoutMs" th:value="${channel.connectionTimeoutMs}" placeholder="10000">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"
+                                th:text="${isEdit} ? 'Save Changes' : 'Create Channel'"></button>
+                        <a th:href="@{/ui/partners/{id}(id=${partnerId})}" class="btn btn-outline">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleProtocolFields() {
+    var p = document.getElementById('protocolSelect').value;
+    document.getElementById('sftpFields').style.display = (p === 'SFTP' || p === 'FTP') ? '' : 'none';
+    document.getElementById('ftpOptions').style.display = (p === 'FTP') ? '' : 'none';
+    document.getElementById('as2Fields').style.display = (p === 'AS2') ? '' : 'none';
+    document.getElementById('httpFields').style.display = (p === 'HTTP') ? '' : 'none';
+    document.getElementById('protocolLabel').textContent = p;
+}
+toggleProtocolFields();
+</script>
+</body>
+</html>

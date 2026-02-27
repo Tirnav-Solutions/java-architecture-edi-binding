@@ -21,6 +21,8 @@ import javax.edi.bind.hierarchy.HierarchyReference;
 import javax.edi.bind.hierarchy.HierarchyUtil;
 import javax.edi.bind.util.BufferedSegmentIterator;
 import javax.edi.bind.util.CollectionFactory;
+import javax.edi.bind.util.EDIValidationError;
+import javax.edi.bind.util.EDIValidationUtil;
 import javax.edi.bind.util.FieldAwareConverter;
 import javax.edi.bind.util.SegmentIterator;
 import javax.edi.configuration.EDIMessageConfiguration;
@@ -73,6 +75,111 @@ public class EDIUnmarshaller
         return (T)parseEDIMessage((Class<Object>)clz, reader);
     }
     
+    /**
+     * Unmarshals an EDI message and returns a result wrapper containing:
+     * - The parsed object (or null if parsing failed)
+     * - List of validation errors (empty if valid)
+     * - Number of EDI segments parsed
+     * 
+     * This method NEVER throws an exception. All errors are captured in the result.
+     * 
+     * @param <T> the EDI message type
+     * @param clz the class of the EDI message
+     * @param reader the reader containing the EDI message
+     * @return EDIUnmarshalResult containing the parsed object and any errors
+     */
+    public static <T> EDIUnmarshalResult<T> unmarshalResult(final Class<T> clz, final Reader reader) {
+        EDIUnmarshalResult<T> result = new EDIUnmarshalResult<>();
+        try {
+            if (!clz.isAnnotationPresent(EDIMessage.class)) {
+                result.setParseError("Not EDI Message Class.");
+                return result;
+            }
+            final EDIMessage ediMessage = clz.getAnnotation(EDIMessage.class);
+            return parseEDIMessageResult(clz, reader, ediMessage);
+        } catch (Exception e) {
+            result.setParseError(e.getMessage());
+            LOG.error("EDI unmarshal failed: " + e.getMessage(), e);
+            return result;
+        }
+    }
+    
+    /**
+     * Unmarshals an EDI message with custom configuration and returns a result wrapper.
+     * This method NEVER throws an exception. All errors are captured in the result.
+     * 
+     * @param <T> the EDI message type
+     * @param clz the class of the EDI message
+     * @param reader the reader containing the EDI message
+     * @param config the EDI message configuration
+     * @return EDIUnmarshalResult containing the parsed object and any errors
+     */
+    public static <T> EDIUnmarshalResult<T> unmarshalResult(final Class<T> clz, final Reader reader, final EDIMessageConfiguration config) {
+        EDIUnmarshalResult<T> result = new EDIUnmarshalResult<>();
+        try {
+            final EDIMessage ediMessage = new EDIMessage() {
+                public Class<? extends Annotation> annotationType() { return EDIMessage.class; }
+                public char segmentDelimiter() { return config.getSegmentDelimiter(); }
+                public char elementDelimiter() { return config.getElementDelimiter(); }
+                public char componentDelimiter() { return config.getComponentDelimiter(); }
+            };
+            return parseEDIMessageResult(clz, reader, ediMessage);
+        } catch (Exception e) {
+            result.setParseError(e.getMessage());
+            LOG.error("EDI unmarshal failed: " + e.getMessage(), e);
+            return result;
+        }
+    }
+    
+    private static <T> EDIUnmarshalResult<T> parseEDIMessageResult(final Class<T> clz, final Reader reader, final EDIMessage ediMessage) {
+        EDIUnmarshalResult<T> result = new EDIUnmarshalResult<>();
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            final BufferedSegmentIterator bufferedIterator = new BufferedSegmentIterator(new SegmentIterator(reader, ediMessage.segmentDelimiter(), true));
+            final Field[] fields = clz.getDeclaredFields();
+            final Iterator<Field> fieldIterator = Arrays.asList(fields).iterator();
+            final T obj = clz.newInstance();
+            final Stack<HierarchyReference> stack = new Stack<HierarchyReference>();
+            int segmentCount = 0;
+            
+            while (fieldIterator.hasNext() && bufferedIterator.hasNext()) {
+                parseEDISegmentOrSegmentGroup(ediMessage, obj, fieldIterator, bufferedIterator, stack);
+                segmentCount++;
+            }
+            
+            // Count any remaining unhandled segments
+            if (bufferedIterator.hasNext()) {
+                final StringBuilder sb = new StringBuilder();
+                while (bufferedIterator.hasNext()) {
+                    final String segment = bufferedIterator.next();
+                    sb.append("Unhandled segment: ").append(segment).append("\n");
+                    segmentCount++;
+                }
+                result.setParseError("Unparsed segments remain: " + sb.toString());
+            }
+            
+            result.setData(obj);
+            result.setSegmentCount(segmentCount);
+            result.setParsed(true);
+            
+            // Extract segment statistics from the parsed object tree
+            collectSegmentStats(obj, result);
+            
+            // Validate the entire parsed message tree - collect errors, don't throw
+            EDIValidationError.ValidationResult validationResult = EDIValidationUtil.validateDeepAndCollectErrors(obj);
+            result.setValidationResult(validationResult);
+            
+        } catch (Exception e) {
+            result.setParseError(e.getMessage());
+            LOG.error("EDI parsing failed: " + e.getMessage(), e);
+        } finally {
+            result.setParseTimeMillis(System.currentTimeMillis() - startTime);
+        }
+        
+        return result;
+    }
+    
     protected static <T> T parseEDIMessage(final Class<T> clz, final Reader reader) throws EDIMessageException, InstantiationException, IllegalAccessException, InvocationTargetException, ClassNotFoundException, ConversionException {
         if (!clz.isAnnotationPresent(EDIMessage.class)) {
             throw new EDIMessageException("Not EDI Message Class.");
@@ -98,6 +205,10 @@ public class EDIUnmarshaller
             }
             throw new EDIMessageException("Unparsed segments remain: " + sb.toString());
         }
+        
+        // Validate the entire parsed message tree (recursively validates all segments and segment groups)
+        EDIValidationUtil.validateDeep(obj);
+        
         return obj;
     }
     
@@ -154,12 +265,39 @@ public class EDIUnmarshaller
                 while (fieldIterator.hasNext() && segmentIterator.hasNext()) {
                     parseEDISegmentOrSegmentGroup(ediMessage, collectionObj, fieldIterator, segmentIterator, hierarchy);
                 }
+                
                 obj.add(collectionObj);
-                final String nextLine = segmentIterator.peek();
-                final String candidateTag = StringUtils.substringBefore(nextLine, CharUtils.toString(ediMessage.elementDelimiter()));
-                if (!StringUtils.equals(segmentTag, candidateTag)) {//Add Check
+                
+                // Consume footer of current group if present
+                if (StringUtils.isNotBlank(es.header()) && segmentIterator.hasNext()) {
+                    final String footerCandidate = segmentIterator.peek();
+                    if (StringUtils.equals(es.footer(), footerCandidate)) {
+                        segmentIterator.next();
+                    }
+                }
+                
+                // Check if there's a next segment
+                if (!segmentIterator.hasNext()) {
                     break;
-                }else if("HL".equalsIgnoreCase(candidateTag) && !nextLine.equalsIgnoreCase(line)) {
+                }
+                
+                String nextLine = segmentIterator.peek();
+                String candidateTag = StringUtils.substringBefore(nextLine, CharUtils.toString(ediMessage.elementDelimiter()));
+                
+                // If the next segment is the header of the same group type, consume it and continue
+                if (StringUtils.isNotBlank(es.header()) && StringUtils.equals(es.header(), candidateTag)) {
+                    segmentIterator.next(); // consume the header for the next group
+                    continue;
+                }
+                
+                // Use matchesSegment() to check if next line matches this segment group
+                if (!matchesSegment(fm.getField(), candidateTag)) {
+                    // Different segment type found, stop collecting
+                    break;
+                }
+                
+                // Special handling for HL segments with hierarchy
+                if("HL".equalsIgnoreCase(candidateTag) && !nextLine.equalsIgnoreCase(line)) {
                 	String[] prev = line.split(Pattern.quote(String.valueOf(ediMessage.elementDelimiter())));
                 	String[] next = nextLine.split(Pattern.quote(String.valueOf(ediMessage.elementDelimiter())));
                     // Get the third element (index 2) from the array
@@ -178,9 +316,10 @@ public class EDIUnmarshaller
             while (fieldIterator2.hasNext() && segmentIterator.hasNext()) {
                 parseEDISegmentOrSegmentGroup(ediMessage, obj2, fieldIterator2, segmentIterator, hierarchy);
             }
+            
             BeanUtils.setProperty((Object)object, fm.getField().getName(), obj2);
         }
-        if (StringUtils.isNotBlank(es.header())) {
+        if (StringUtils.isNotBlank(es.header()) && segmentIterator.hasNext()) {
             line = segmentIterator.peek();
             if (StringUtils.endsWith(es.footer(), line)) {
                 segmentIterator.next();
@@ -188,7 +327,7 @@ public class EDIUnmarshaller
         }
     }
     
-    protected static <T> void processSegment(final EDIMessage ediMessage, final T object, final BufferedSegmentIterator segmentIterator, final FieldMatch fm, final Stack<HierarchyReference> hierarchy) throws InstantiationException, IllegalAccessException, InvocationTargetException, ClassNotFoundException, ConversionException {
+    protected static <T> void processSegment(final EDIMessage ediMessage, final T object, final BufferedSegmentIterator segmentIterator, final FieldMatch fm, final Stack<HierarchyReference> hierarchy) throws InstantiationException, IllegalAccessException, InvocationTargetException, ClassNotFoundException, ConversionException, EDIMessageException {
         if (Collection.class.isAssignableFrom(fm.getField().getType())) {
             final Collection obj = CollectionFactory.newInstance(fm.getField().getType());
             BeanUtils.setProperty((Object)object, fm.getField().getName(), (Object)obj);
@@ -197,11 +336,13 @@ public class EDIUnmarshaller
                 final EDISegment es = collectionClass.getAnnotation(EDISegment.class);
                 final Object matchObject = collectionClass.newInstance();
                 parseEDISegmentFields(ediMessage, matchObject, fm.getLine());
+                
                 obj.add(matchObject);
                 final Queue<String> segments = queueLinesForType(ediMessage, es, segmentIterator);
                 for (final String segment : segments) {
                     final Object collectionObject = collectionClass.newInstance();
                     parseEDISegmentFields(ediMessage, collectionObject, segment);
+                    
                     obj.add(collectionObject);
                 }
             }
@@ -210,6 +351,7 @@ public class EDIUnmarshaller
             final Object obj2 = fm.getField().getType().newInstance();
             BeanUtils.setProperty((Object)object, fm.getField().getName(), obj2);
             parseEDISegmentFields(ediMessage, obj2, fm.getLine());
+            
             if (HierarchyUtil.isHierarchyReference(fm.getField().getType())) {
                 final HierarchyReference ref = HierarchyUtil.generateHierarchyReference(obj2);
                 System.out.println("Hierarchy.");
@@ -335,6 +477,17 @@ public class EDIUnmarshaller
             }
             else {
                 try {
+                    // Validate @Size on the raw string value before type conversion
+                    // This allows @Size to work on fields like Date where the raw EDI
+                    // string must be a certain length (e.g. "HHmm" needs 4 chars)
+                    if (field.isAnnotationPresent(javax.validation.constraints.Size.class)) {
+                        javax.validation.constraints.Size sizeConstraint = field.getAnnotation(javax.validation.constraints.Size.class);
+                        if (val.length() < sizeConstraint.min() || val.length() > sizeConstraint.max()) {
+                            throw new EDIMessageException("Validation failed for " + segment.getClass().getSimpleName() + "." + field.getName() 
+                                + ": size must be between " + sizeConstraint.min() + " and " + sizeConstraint.max() 
+                                + " (actual: " + val.length() + ", value: '" + val + "')");
+                        }
+                    }
                     final Object fieldObj2 = FieldAwareConverter.convertFromString(field.getType(), field, val);
                     EDIUnmarshaller.LOG.debug("  " + field.getName() + " -> " + val);
                     BeanUtils.setProperty(segment, field.getName(), fieldObj2);
@@ -386,6 +539,54 @@ public class EDIUnmarshaller
         @Override
         public String toString() {
             return "FieldMatch [field=" + this.field + ", line=" + this.line + "]";
+        }
+    }
+    
+    /**
+     * Recursively walks the parsed object tree and counts occurrences of each segment type.
+     */
+    private static <T> void collectSegmentStats(Object obj, EDIUnmarshalResult<T> result) {
+        if (obj == null) return;
+        collectSegmentStatsRecursive(obj, result, new java.util.HashSet<>());
+    }
+    
+    private static <T> void collectSegmentStatsRecursive(Object obj, EDIUnmarshalResult<T> result, java.util.Set<Object> visited) {
+        if (obj == null || visited.contains(obj)) return;
+        visited.add(obj);
+        
+        Class<?> clazz = obj.getClass();
+        
+        // Count this object if it's a segment
+        if (clazz.isAnnotationPresent(EDISegment.class)) {
+            result.recordSegment(clazz.getAnnotation(EDISegment.class).tag());
+        }
+        
+        // Walk into all fields
+        for (Field field : clazz.getDeclaredFields()) {
+            if (field.isSynthetic()) continue;
+            field.setAccessible(true);
+            try {
+                Object fieldValue = field.get(obj);
+                if (fieldValue == null) continue;
+                
+                if (Collection.class.isAssignableFrom(fieldValue.getClass())) {
+                    for (Object item : (Collection<?>) fieldValue) {
+                        if (item != null) {
+                            Class<?> itemClass = item.getClass();
+                            if (itemClass.isAnnotationPresent(EDISegment.class) || itemClass.isAnnotationPresent(EDISegmentGroup.class)) {
+                                collectSegmentStatsRecursive(item, result, visited);
+                            }
+                        }
+                    }
+                } else {
+                    Class<?> fClass = fieldValue.getClass();
+                    if (fClass.isAnnotationPresent(EDISegment.class) || fClass.isAnnotationPresent(EDISegmentGroup.class)) {
+                        collectSegmentStatsRecursive(fieldValue, result, visited);
+                    }
+                }
+            } catch (IllegalAccessException e) {
+                // skip
+            }
         }
     }
 }

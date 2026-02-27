@@ -1,5 +1,6 @@
 package javax.edi.bind;
 
+import java.io.StringWriter;
 import java.io.Writer;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -11,6 +12,8 @@ import javax.edi.bind.annotations.EDIElement;
 import javax.edi.bind.annotations.EDIMessage;
 import javax.edi.bind.annotations.EDISegment;
 import javax.edi.bind.annotations.EDISegmentGroup;
+import javax.edi.bind.util.EDIValidationError;
+import javax.edi.bind.util.EDIValidationUtil;
 import javax.edi.bind.util.FieldAwareConverter;
 import javax.edi.configuration.EDIMessageConfiguration;
 
@@ -28,12 +31,121 @@ public class EDIMarshaller {
 		// seal
 	}
 	
+	/**
+	 * Marshals an EDI object and returns a result wrapper containing:
+	 * - The generated EDI string (or null if validation failed)
+	 * - List of validation errors (empty if valid)
+	 * - Number of EDI segments generated
+	 * 
+	 * This method NEVER throws an exception. All errors are captured in the result.
+	 * 
+	 * @param <T> the EDI message type
+	 * @param obj the EDI message object to marshal
+	 * @return EDIMarshalResult containing the EDI output and any errors
+	 */
+	public static <T> EDIMarshalResult marshalResult(T obj) {
+		EDIMarshalResult result = new EDIMarshalResult();
+		try {
+			Class<T> clazz = (Class<T>) obj.getClass();
+			
+			if (!clazz.isAnnotationPresent(EDIMessage.class)) {
+				result.setError("Not a EDI Message!");
+				return result;
+			}
+			
+			// Validate first - collect errors, don't throw
+			EDIValidationError.ValidationResult validationResult = EDIValidationUtil.validateDeepAndCollectErrors(obj);
+			result.setValidationResult(validationResult);
+			
+			if (validationResult.hasErrors()) {
+				// Don't generate EDI if validation fails
+				return result;
+			}
+			
+			EDIMessage message = clazz.getAnnotation(EDIMessage.class);
+			StringWriter writer = new StringWriter();
+			processSegmentsAndSegmentGroups(message, obj, writer);
+			
+			String ediOutput = writer.toString();
+			result.setEdiOutput(ediOutput);
+			result.setSuccess(true);
+			
+			// Count segments (each line ending with segment delimiter is a segment)
+			int segCount = 0;
+			for (char c : ediOutput.toCharArray()) {
+				if (c == message.segmentDelimiter()) {
+					segCount++;
+				}
+			}
+			result.setSegmentCount(segCount);
+			
+		} catch (Exception e) {
+			result.setError(e.getMessage());
+			LOG.error("EDI marshal failed: " + e.getMessage(), e);
+		}
+		return result;
+	}
+	
+	/**
+	 * Marshals an EDI object with custom config and returns a result wrapper.
+	 * This method NEVER throws an exception. All errors are captured in the result.
+	 */
+	public static <T> EDIMarshalResult marshalResult(T obj, final EDIMessageConfiguration config) {
+		EDIMarshalResult result = new EDIMarshalResult();
+		try {
+			Class<T> clazz = (Class<T>) obj.getClass();
+			
+			if (!clazz.isAnnotationPresent(EDIMessage.class)) {
+				result.setError("Not a EDI Message!");
+				return result;
+			}
+			
+			EDIValidationError.ValidationResult validationResult = EDIValidationUtil.validateDeepAndCollectErrors(obj);
+			result.setValidationResult(validationResult);
+			
+			if (validationResult.hasErrors()) {
+				return result;
+			}
+			
+			final EDIMessage message = new EDIMessage() {
+				public Class<? extends Annotation> annotationType() { return EDIMessage.class; }
+				public char segmentDelimiter() { return config.getSegmentDelimiter(); }
+				public char elementDelimiter() { return config.getElementDelimiter(); }
+				public char componentDelimiter() { return config.getComponentDelimiter(); }
+			};
+			
+			StringWriter writer = new StringWriter();
+			processSegmentsAndSegmentGroups(message, obj, writer);
+			
+			String ediOutput = writer.toString();
+			result.setEdiOutput(ediOutput);
+			result.setSuccess(true);
+			
+			int segCount = 0;
+			for (char c : ediOutput.toCharArray()) {
+				if (c == message.segmentDelimiter()) {
+					segCount++;
+				}
+			}
+			result.setSegmentCount(segCount);
+			
+		} catch (Exception e) {
+			result.setError(e.getMessage());
+			LOG.error("EDI marshal failed: " + e.getMessage(), e);
+		}
+		return result;
+	}
+
     public static <T> void marshal(T obj, Writer writer, final EDIMessageConfiguration config) throws Exception {
     	Class<T> clazz = (Class<T>)obj.getClass(); 
     	
         if(!clazz.isAnnotationPresent(EDIMessage.class)) {
         	throw new EDIMessageException("Not a EDI Message!");
         }
+        
+        // Validate the object against its annotations
+        FieldAwareConverter.validateObject(obj);
+        
         final EDIMessage message = new EDIMessage() {
             public Class<? extends Annotation> annotationType() {
                 return EDIMessage.class;
@@ -61,6 +173,9 @@ public class EDIMarshaller {
         if(!clazz.isAnnotationPresent(EDIMessage.class)) {
         	throw new EDIMessageException("Not a EDI Message!");
         }
+        
+        // Validate the object against its annotations
+        FieldAwareConverter.validateObject(obj);
         
         EDIMessage message = clazz.getAnnotation(EDIMessage.class);
         processSegmentsAndSegmentGroups(message, obj, writer);
@@ -156,20 +271,21 @@ public class EDIMarshaller {
         }
         
         if(StringUtils.isNotBlank(segmentGroup.header())) {
-        	//print the header / footer.
-        	writer.append(segmentGroup.header());
-        	writer.append(message.segmentDelimiter());
+        	//print the header / footer for each group in the collection.
+        	for(Object collectionObj : collectionObjs) {
+        		writer.append(segmentGroup.header());
+        		writer.append(message.segmentDelimiter());
+        		writeSegmentGroup(message, collectionObj, writer);
+        		if(StringUtils.isNotBlank(segmentGroup.footer())) {
+        			writer.append(segmentGroup.footer());
+        			writer.append(message.segmentDelimiter());
+        		}
+        	}
         }
-
-
-		for(Object collectionObj : collectionObjs) {
-			writeSegmentGroup(message, collectionObj, writer);
-		}
-        
-		if(StringUtils.isNotBlank(segmentGroup.footer())) {
-        	//print the header / footer.
-        	writer.append(segmentGroup.footer());
-        	writer.append(message.segmentDelimiter());
+        else {
+        	for(Object collectionObj : collectionObjs) {
+        		writeSegmentGroup(message, collectionObj, writer);
+        	}
         }
     }
     

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>Team Members</h1>
+        <div class="topbar-right">
+            <a th:href="@{/ui/users/invite}" class="btn btn-primary btn-sm"
+               th:if="${currentUser.canManage()}">+ Invite User</a>
+        </div>
+    </div>
+    <div class="content">
+
+        <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th th:if="${currentUser.isSuperAdmin()}">Tenant</th>
+                        <th>Last Login</th>
+                        <th>Created</th>
+                        <th th:if="${currentUser.canManage()}">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="u : ${users}">
+                        <td style="font-weight:600" th:text="${u.fullName}"></td>
+                        <td class="text-sm" th:text="${u.email}"></td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${u.role.name() == 'ADMIN'} ? 'badge-danger' : (${u.role.name() == 'TENANT_ADMIN'} ? 'badge-primary' : (${u.role.name() == 'OPERATOR'} ? 'badge-success' : 'badge-gray'))"
+                                  th:text="${u.role}"></span>
+                        </td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${u.status.name() == 'ACTIVE'} ? 'badge-success' : 'badge-danger'"
+                                  th:text="${u.status}"></span>
+                        </td>
+                        <td th:if="${currentUser.isSuperAdmin()}" class="text-sm text-muted" th:text="${u.tenantId}"></td>
+                        <td class="text-sm text-muted" th:text="${u.lastLoginAt != null ? #temporals.format(u.lastLoginAt, 'MMM dd HH:mm') : 'Never'}"></td>
+                        <td class="text-sm text-muted" th:text="${u.createdAt != null ? #temporals.format(u.createdAt, 'MMM dd, yyyy') : ''}"></td>
+                        <td th:if="${currentUser.canManage()}">
+                            <form th:if="${u.status.name() == 'ACTIVE' && u.id != currentUser.id}"
+                                  th:action="@{/ui/users/{id}/disable(id=${u.id})}" method="post" style="display:inline">
+                                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger)">Disable</button>
+                            </form>
+                            <form th:if="${u.status.name() != 'ACTIVE'}"
+                                  th:action="@{/ui/users/{id}/enable(id=${u.id})}" method="post" style="display:inline">
+                                <button type="submit" class="btn btn-outline btn-sm">Enable</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(users)}">
+                        <td colspan="8" style="text-align:center;padding:48px;color:var(--gray-400)">
+                            No team members yet. Click "Invite User" to add one.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>

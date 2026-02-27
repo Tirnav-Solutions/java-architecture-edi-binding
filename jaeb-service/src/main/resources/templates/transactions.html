@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transactions — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>Transaction Log</h1>
+        <div class="topbar-right">
+            <span class="text-sm text-muted"
+                  th:text="${txnPage.totalElements} + ' total records'"></span>
+        </div>
+    </div>
+    <div class="content">
+
+        <!-- Filter Bar -->
+        <form th:action="@{/ui/transactions}" method="get" class="filter-bar">
+            <div>
+                <label>Status</label><br>
+                <select name="status">
+                    <option value="">All</option>
+                    <option value="PARSED" th:selected="${filterStatus == 'PARSED'}">Parsed</option>
+                    <option value="PARSED_WITH_ERRORS" th:selected="${filterStatus == 'PARSED_WITH_ERRORS'}">With Errors</option>
+                    <option value="FAILED" th:selected="${filterStatus == 'FAILED'}">Failed</option>
+                    <option value="ACKNOWLEDGED" th:selected="${filterStatus == 'ACKNOWLEDGED'}">Acknowledged</option>
+                    <option value="DELIVERED" th:selected="${filterStatus == 'DELIVERED'}">Delivered</option>
+                    <option value="ERROR" th:selected="${filterStatus == 'ERROR'}">Error</option>
+                </select>
+            </div>
+            <div>
+                <label>Type</label><br>
+                <select name="type">
+                    <option value="">All</option>
+                    <option th:each="t : ${ {'850','810','855','856','997','832','846'} }"
+                            th:value="${t}" th:text="${t}" th:selected="${filterType == t}"></option>
+                </select>
+            </div>
+            <div>
+                <label>Partner</label><br>
+                <input type="text" name="partner" placeholder="Partner ID..."
+                       th:value="${filterPartner}" style="width:130px">
+            </div>
+            <div>
+                <label>From</label><br>
+                <input type="date" name="from" th:value="${filterFrom}">
+            </div>
+            <div>
+                <label>To</label><br>
+                <input type="date" name="to" th:value="${filterTo}">
+            </div>
+            <div style="align-self:flex-end">
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                <a th:href="@{/ui/transactions}" class="btn btn-outline btn-sm">Clear</a>
+                <a th:href="@{/ui/transactions/export(status=${filterStatus}, type=${filterType}, partner=${filterPartner}, from=${filterFrom}, to=${filterTo})}"
+                   class="btn btn-outline btn-sm">&#8615; Export CSV</a>
+            </div>
+        </form>
+
+        <!-- Table with sticky header -->
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Processed</th>
+                        <th>Tracking ID</th>
+                        <th>Type</th>
+                        <th>Direction</th>
+                        <th>Partner</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Segments</th>
+                        <th>Time (ms)</th>
+                        <th>997</th>
+                        <th>ISA Control #</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="txn : ${txnPage.content}">
+                        <td class="text-sm" th:text="${txn.processedAt != null ? #temporals.format(txn.processedAt, 'yyyy-MM-dd HH:mm:ss') : ''}"></td>
+                        <td>
+                            <a th:href="@{/ui/transactions/{id}(id=${txn.transactionId})}"
+                               class="mono" style="color:var(--primary);font-size:.78rem"
+                               th:text="${#strings.abbreviate(txn.transactionId, 14)}"></a>
+                        </td>
+                        <td><span class="badge badge-primary" th:text="${txn.transactionType}"></span></td>
+                        <td><span class="badge badge-gray" th:text="${txn.direction}"></span></td>
+                        <td th:text="${txn.partnerId != null ? txn.partnerId : '—'}" class="text-muted text-sm"></td>
+                        <td><span class="badge badge-gray" th:text="${txn.source}"></span></td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${txn.status.name() == 'PARSED' || txn.status.name() == 'ACKNOWLEDGED' || txn.status.name() == 'DELIVERED'} ? 'badge-success' : (${txn.status.name() == 'FAILED' || txn.status.name() == 'ERROR'} ? 'badge-danger' : 'badge-warning')"
+                                  th:text="${txn.status}"></span>
+                        </td>
+                        <td class="text-sm" th:text="${txn.segmentCount}"></td>
+                        <td class="text-sm" th:text="${txn.parseTimeMs}"></td>
+                        <td>
+                            <span th:if="${txn.acknowledgeCode != null}" class="badge badge-success" th:text="'AK9=' + ${txn.acknowledgeCode}"></span>
+                            <span th:if="${txn.acknowledgeCode == null}" class="text-muted">—</span>
+                        </td>
+                        <td class="mono text-sm" th:text="${txn.interchangeControlNumber != null ? txn.interchangeControlNumber : '—'}"></td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(txnPage.content)}">
+                        <td colspan="11" style="text-align:center;padding:48px;color:var(--gray-400)">
+                            No transactions match the current filters.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination" th:if="${txnPage.totalPages > 0}">
+            <div class="pagination-info">
+                Showing
+                <strong th:text="${txnPage.number * txnPage.size + 1}"></strong>–<strong
+                    th:text="${#numbers.min(txnPage.number * txnPage.size + txnPage.size, txnPage.totalElements)}"></strong>
+                of <strong th:text="${txnPage.totalElements}"></strong>
+            </div>
+            <div class="pagination-links">
+                <a th:href="@{/ui/transactions(page=0, size=${txnPage.size}, status=${filterStatus}, type=${filterType}, partner=${filterPartner}, from=${filterFrom}, to=${filterTo})}"
+                   th:classappend="${txnPage.number == 0} ? 'disabled'">&laquo;</a>
+                <a th:href="@{/ui/transactions(page=${txnPage.number - 1}, size=${txnPage.size}, status=${filterStatus}, type=${filterType}, partner=${filterPartner}, from=${filterFrom}, to=${filterTo})}"
+                   th:classappend="${!txnPage.hasPrevious()} ? 'disabled'">&lsaquo;</a>
+
+                <th:block th:each="i : ${pageNumbers}">
+                    <a th:href="@{/ui/transactions(page=${i}, size=${txnPage.size}, status=${filterStatus}, type=${filterType}, partner=${filterPartner}, from=${filterFrom}, to=${filterTo})}"
+                       th:text="${i + 1}"
+                       th:classappend="${i == txnPage.number} ? 'active'"></a>
+                </th:block>
+
+                <a th:href="@{/ui/transactions(page=${txnPage.number + 1}, size=${txnPage.size}, status=${filterStatus}, type=${filterType}, partner=${filterPartner}, from=${filterFrom}, to=${filterTo})}"
+                   th:classappend="${!txnPage.hasNext()} ? 'disabled'">&rsaquo;</a>
+                <a th:href="@{/ui/transactions(page=${txnPage.totalPages - 1}, size=${txnPage.size}, status=${filterStatus}, type=${filterType}, partner=${filterPartner}, from=${filterFrom}, to=${filterTo})}"
+                   th:classappend="${txnPage.number == txnPage.totalPages - 1} ? 'disabled'">&raquo;</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+</body>
+</html>

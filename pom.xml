@@ -26,6 +26,16 @@
 			<version>1.1.0.Final</version>
 		</dependency>
 		<dependency>
+			<groupId>org.hibernate</groupId>
+			<artifactId>hibernate-validator</artifactId>
+			<version>5.4.3.Final</version>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish</groupId>
+			<artifactId>javax.el</artifactId>
+			<version>3.0.1-b11</version>
+		</dependency>
+		<dependency>
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 			<version>2.4</version>
@@ -55,8 +65,8 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.11.0</version>
 				<configuration>
-					<source>21</source>
-					<target>21</target>
+					<source>11</source>
+					<target>11</target>
 					<debug>true</debug>
 				</configuration>
 			</plugin>
@@ -100,5 +110,6 @@
 	<modules>
 		<module>jaeb-core</module>
 		<module>jaeb-model-x12</module>
+		<module>jaeb-service</module>
 	</modules>
 </project>

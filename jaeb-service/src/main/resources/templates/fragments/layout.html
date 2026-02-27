@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!-- Shared sidebar navigation fragment -->
+<nav th:fragment="sidebar" class="sidebar">
+    <div class="sidebar-brand">
+        <h2>&#9670; JAEB EDI</h2>
+        <small>EDI-as-a-Service</small>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-section">Overview</div>
+        <a th:href="@{/ui/dashboard}" th:classappend="${activeTab == 'dashboard'} ? 'active'">
+            <span class="nav-icon">&#9632;</span> Dashboard
+        </a>
+
+        <div class="nav-section">Operations</div>
+        <a th:href="@{/ui/transactions}" th:classappend="${activeTab == 'transactions'} ? 'active'">
+            <span class="nav-icon">&#9776;</span> Transactions
+        </a>
+        <a th:href="@{/ui/partners}" th:classappend="${activeTab == 'partners'} ? 'active'">
+            <span class="nav-icon">&#9823;</span> Trading Partners
+        </a>
+
+        <div class="nav-section">Administration</div>
+        <a th:href="@{/ui/users}" th:classappend="${activeTab == 'users'} ? 'active'">
+            <span class="nav-icon">&#9733;</span> Team / Users
+        </a>
+
+        <div class="nav-section">Tools</div>
+        <a th:href="@{/swagger-ui.html}" target="_blank">
+            <span class="nav-icon">&#9881;</span> API Docs
+        </a>
+        <a th:href="@{/h2-console}" target="_blank">
+            <span class="nav-icon">&#9707;</span> Database
+        </a>
+    </div>
+    <div style="padding:16px 20px;border-top:1px solid #374151;margin-top:auto">
+        <div th:if="${currentUser}" style="margin-bottom:10px">
+            <div style="font-size:.78rem;color:#9ca3af">Signed in as</div>
+            <div style="font-size:.85rem;font-weight:600;color:#fff" th:text="${currentUser.fullName}"></div>
+            <div style="font-size:.7rem;color:#6b7280" th:text="${currentUser.tenantId}"></div>
+            <div style="margin-top:2px">
+                <span style="font-size:.65rem;padding:2px 6px;border-radius:100px;font-weight:700;text-transform:uppercase;letter-spacing:.03em"
+                      th:style="${currentUser.role.name() == 'ADMIN'} ? 'background:#fee2e2;color:#dc2626' : 'background:#e8f0fe;color:#1a56db'"
+                      th:text="${currentUser.role}"></span>
+            </div>
+        </div>
+        <a th:href="@{/ui/logout}" style="font-size:.8rem;color:#9ca3af;text-decoration:none">&#x2190; Sign Out</a>
+    </div>
+</nav>
+</html>

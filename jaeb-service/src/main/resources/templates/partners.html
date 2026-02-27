@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Partners — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>Trading Partners</h1>
+        <div class="topbar-right">
+            <a th:href="@{/ui/partners/new}" class="btn btn-primary btn-sm">+ Onboard Partner</a>
+        </div>
+    </div>
+    <div class="content">
+
+        <!-- Success/error message -->
+        <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+        <!-- Filter -->
+        <form th:action="@{/ui/partners}" method="get" class="filter-bar">
+            <div>
+                <label>Status</label><br>
+                <select name="status">
+                    <option value="">All</option>
+                    <option value="ACTIVE" th:selected="${filterStatus == 'ACTIVE'}">Active</option>
+                    <option value="ONBOARDING" th:selected="${filterStatus == 'ONBOARDING'}">Onboarding</option>
+                    <option value="SUSPENDED" th:selected="${filterStatus == 'SUSPENDED'}">Suspended</option>
+                    <option value="INACTIVE" th:selected="${filterStatus == 'INACTIVE'}">Inactive</option>
+                </select>
+            </div>
+            <div style="align-self:flex-end">
+                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                <a th:href="@{/ui/partners}" class="btn btn-outline btn-sm">Clear</a>
+            </div>
+        </form>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Partner ID</th>
+                        <th>Name</th>
+                        <th>ISA ID</th>
+                        <th>Status</th>
+                        <th>Txn Types</th>
+                        <th>SFTP</th>
+                        <th>Auto 997</th>
+                        <th>Contact</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="p : ${partners}">
+                        <td>
+                            <a th:href="@{/ui/partners/{id}(id=${p.partnerId})}"
+                               style="color:var(--primary);font-weight:600" th:text="${p.partnerId}"></a>
+                        </td>
+                        <td th:text="${p.partnerName}"></td>
+                        <td class="mono text-sm" th:text="${p.isaId != null ? p.isaId : '—'}"></td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${p.status.name() == 'ACTIVE'} ? 'badge-success' : (${p.status.name() == 'SUSPENDED'} ? 'badge-danger' : (${p.status.name() == 'ONBOARDING'} ? 'badge-warning' : 'badge-gray'))"
+                                  th:text="${p.status}"></span>
+                        </td>
+                        <td class="text-sm" th:text="${p.supportedTransactionTypes != null ? p.supportedTransactionTypes : '—'}"></td>
+                        <td>
+                            <span th:if="${p.sftpHost != null}" class="badge badge-success">Configured</span>
+                            <span th:if="${p.sftpHost == null}" class="text-muted text-sm">—</span>
+                        </td>
+                        <td>
+                            <span th:if="${p.autoAcknowledge}" class="badge badge-success">ON</span>
+                            <span th:unless="${p.autoAcknowledge}" class="badge badge-gray">OFF</span>
+                        </td>
+                        <td class="text-sm" th:text="${p.contactEmail != null ? p.contactEmail : '—'}"></td>
+                        <td class="text-sm text-muted" th:text="${p.createdAt != null ? #temporals.format(p.createdAt, 'MMM dd, yyyy') : ''}"></td>
+                        <td>
+                            <a th:href="@{/ui/partners/{id}/edit(id=${p.partnerId})}" class="btn btn-outline btn-sm">Edit</a>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(partners)}">
+                        <td colspan="10" style="text-align:center;padding:48px;color:var(--gray-400)">
+                            No trading partners found. Click "Onboard Partner" to add one.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>

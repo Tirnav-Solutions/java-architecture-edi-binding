@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>Dashboard</h1>
+        <div class="topbar-right">
+            <span class="text-sm text-muted" th:text="'v0.0.1-SNAPSHOT'"></span>
+        </div>
+    </div>
+    <div class="content">
+        <!-- Stat Cards -->
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <div class="stat-label">Total Transactions</div>
+                <div class="stat-value" th:text="${totalTransactions}">0</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-label">Parsed</div>
+                <div class="stat-value" th:text="${countParsed}">0</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-label">With Errors</div>
+                <div class="stat-value" th:text="${countErrors}">0</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-label">Failed</div>
+                <div class="stat-value" th:text="${countFailed}">0</div>
+            </div>
+            <div class="stat-card primary">
+                <div class="stat-label">Acknowledged</div>
+                <div class="stat-value" th:text="${countAcknowledged}">0</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-label">Active Partners</div>
+                <div class="stat-value" th:text="${activePartners}">0</div>
+            </div>
+        </div>
+
+        <!-- Channel Health -->
+        <div class="card mb-4" th:if="${channels != null && !channels.isEmpty()}">
+            <div class="card-header">
+                <h3>Channel Health</h3>
+                <span class="text-sm text-muted" th:text="${channels.size()} + ' channel(s)'"></span>
+            </div>
+            <div class="table-wrapper" style="max-height:260px">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>Partner</th>
+                            <th>Protocol</th>
+                            <th>Direction</th>
+                            <th>Status</th>
+                            <th>Last Success</th>
+                            <th>Last Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="ch : ${channels}">
+                            <td style="font-weight:600" th:text="${ch.channelName}"></td>
+                            <td class="text-sm">
+                                <a th:href="@{/ui/partners/{id}(id=${ch.partnerId})}"
+                                   style="color:var(--primary);text-decoration:none"
+                                   th:text="${ch.partnerId}"></a>
+                            </td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${ch.protocol.name() == 'AS2'} ? 'badge-primary' : (${ch.protocol.name() == 'HTTP'} ? 'badge-warning' : 'badge-gray')"
+                                      th:text="${ch.protocol}"></span>
+                            </td>
+                            <td><span class="badge badge-gray" th:text="${ch.direction}"></span></td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${ch.status.name() == 'ACTIVE'} ? 'badge-success' : (${ch.status.name() == 'ERROR'} ? 'badge-danger' : 'badge-gray')"
+                                      th:text="${ch.status}"></span>
+                            </td>
+                            <td class="text-sm text-muted"
+                                th:text="${ch.lastSuccessAt != null ? #temporals.format(ch.lastSuccessAt, 'MMM dd HH:mm') : 'Never'}"></td>
+                            <td class="text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                                th:title="${ch.lastErrorMessage}"
+                                th:text="${ch.lastErrorMessage != null ? ch.lastErrorMessage : '—'}"
+                                th:style="${ch.lastErrorMessage != null} ? 'color:var(--danger)' : ''"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Recent Transactions</h3>
+                <a th:href="@{/ui/transactions}" class="btn btn-outline btn-sm">View All &rarr;</a>
+            </div>
+            <div class="table-wrapper" style="max-height:420px">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Tracking ID</th>
+                            <th>Type</th>
+                            <th>Partner</th>
+                            <th>Source</th>
+                            <th>Status</th>
+                            <th>997</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="txn : ${recentTransactions}">
+                            <td class="text-sm text-muted" th:text="${#temporals.format(txn.processedAt, 'MMM dd HH:mm:ss')}"></td>
+                            <td>
+                                <a th:href="@{/ui/transactions/{id}(id=${txn.transactionId})}"
+                                   class="mono truncate" style="color:var(--primary)"
+                                   th:text="${#strings.abbreviate(txn.transactionId, 16)}"></a>
+                            </td>
+                            <td><span class="badge badge-primary" th:text="${txn.transactionType}"></span></td>
+                            <td th:text="${txn.partnerId != null ? txn.partnerId : '—'}" class="text-muted"></td>
+                            <td><span class="badge badge-gray" th:text="${txn.source}"></span></td>
+                            <td>
+                                <span class="badge"
+                                      th:classappend="${txn.status.name() == 'PARSED' || txn.status.name() == 'ACKNOWLEDGED' || txn.status.name() == 'DELIVERED'} ? 'badge-success' : (${txn.status.name() == 'FAILED' || txn.status.name() == 'ERROR'} ? 'badge-danger' : 'badge-warning')"
+                                      th:text="${txn.status}"></span>
+                            </td>
+                            <td>
+                                <span th:if="${txn.acknowledgeCode != null}" class="badge badge-success" th:text="'AK9=' + ${txn.acknowledgeCode}"></span>
+                                <span th:if="${txn.acknowledgeCode == null}" class="text-muted">—</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(recentTransactions)}">
+                            <td colspan="7" style="text-align:center;padding:40px;color:var(--gray-400)">
+                                No transactions yet. Parse an EDI message via the API to see data here.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

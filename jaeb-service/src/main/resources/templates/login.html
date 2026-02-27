@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { background: var(--gray-900); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .login-box { background: #fff; border-radius: 12px; padding: 40px; width: 400px; box-shadow: 0 25px 50px rgba(0,0,0,.25); }
+        .login-brand { text-align: center; margin-bottom: 28px; }
+        .login-brand h1 { font-size: 1.3rem; font-weight: 800; color: var(--gray-900); }
+        .login-brand p { color: var(--gray-500); font-size: .82rem; margin-top: 4px; }
+        .login-box .form-group { margin-bottom: 16px; }
+        .login-box .form-group input { width: 100%; }
+        .login-box .btn { width: 100%; justify-content: center; padding: 10px; font-size: .9rem; }
+        .login-footer { text-align: center; margin-top: 20px; font-size: .82rem; color: var(--gray-500); }
+        .login-footer a { color: var(--primary); text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="login-box">
+    <div class="login-brand">
+        <h1>&#9670; JAEB EDI Platform</h1>
+        <p>Sign in to your EDI-as-a-Service portal</p>
+    </div>
+
+    <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+    <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+
+    <form th:action="@{/ui/login}" method="post">
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required placeholder="you@company.com" autofocus>
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+    </form>
+
+    <div class="login-footer">
+        Don't have an account? <a th:href="@{/ui/signup}">Register your organization</a>
+    </div>
+    <div class="login-footer" style="margin-top:8px">
+        <span class="text-sm" style="color:var(--gray-400)">Default: admin@jaeb.local / admin</span>
+    </div>
+</div>
+</body>
+</html>

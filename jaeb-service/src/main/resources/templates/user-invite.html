@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invite User — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>
+            <a th:href="@{/ui/users}" style="text-decoration:none;color:var(--gray-400)">&larr;</a>
+            &nbsp;Invite Team Member
+        </h1>
+    </div>
+    <div class="content">
+        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+        <div class="card">
+            <div class="card-header"><h3>New User</h3></div>
+            <div class="card-body">
+                <form th:action="@{/ui/users/invite}" method="post">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Full Name *</label>
+                            <input type="text" name="fullName" required placeholder="Jane Smith">
+                        </div>
+                        <div class="form-group">
+                            <label>Email *</label>
+                            <input type="email" name="email" required placeholder="jane@company.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Password *</label>
+                            <input type="password" name="password" required placeholder="Min 6 characters" minlength="6">
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <select name="role">
+                                <option value="OPERATOR">Operator — can manage transactions &amp; partners</option>
+                                <option value="VIEWER">Viewer — read-only access</option>
+                                <option value="TENANT_ADMIN">Tenant Admin — full tenant access</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create User</button>
+                        <a th:href="@{/ui/users}" class="btn btn-outline">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
