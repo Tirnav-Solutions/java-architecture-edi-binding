@@ -10,7 +10,9 @@ import javax.edi.bind.annotations.EDIHierarchicalParentReference;
 import javax.edi.bind.util.FieldAwareConverter;
 
 import org.apache.commons.beanutils.BeanUtils;
-import org.apache.commons.convert.ConversionException;
+import org.apache.commons.beanutils.ConversionException;
+import org.apache.commons.lang.CharUtils;
+import org.apache.commons.lang.StringUtils;
 
 public class HierarchyUtil {
 	
@@ -73,6 +75,4 @@ public class HierarchyUtil {
 		}
 		return new HierarchyReference(id, parentId);
 	}
-	
-	
 }

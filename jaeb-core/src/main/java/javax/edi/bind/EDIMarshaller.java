@@ -1,6 +1,7 @@
 package javax.edi.bind;
 
 import java.io.Writer;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.util.Collection;
 
@@ -11,6 +12,7 @@ import javax.edi.bind.annotations.EDIMessage;
 import javax.edi.bind.annotations.EDISegment;
 import javax.edi.bind.annotations.EDISegmentGroup;
 import javax.edi.bind.util.FieldAwareConverter;
+import javax.edi.configuration.EDIMessageConfiguration;
 
 import org.apache.commons.beanutils.PropertyUtils;
 import org.apache.commons.lang.StringUtils;
@@ -26,6 +28,33 @@ public class EDIMarshaller {
 		// seal
 	}
 	
+    public static <T> void marshal(T obj, Writer writer, final EDIMessageConfiguration config) throws Exception {
+    	Class<T> clazz = (Class<T>)obj.getClass(); 
+    	
+        if(!clazz.isAnnotationPresent(EDIMessage.class)) {
+        	throw new EDIMessageException("Not a EDI Message!");
+        }
+        final EDIMessage message = new EDIMessage() {
+            public Class<? extends Annotation> annotationType() {
+                return EDIMessage.class;
+            }
+            
+            public char segmentDelimiter() {
+                return config.getSegmentDelimiter();
+            }
+            
+            public char elementDelimiter() {
+                return config.getElementDelimiter();
+            }
+            
+            public char componentDelimiter() {
+                return config.getComponentDelimiter();
+            }
+        };
+        
+        processSegmentsAndSegmentGroups(message, obj, writer);
+    }
+	
     public static <T> void marshal(T obj, Writer writer) throws Exception {
     	Class<T> clazz = (Class<T>)obj.getClass(); 
     	
@@ -38,7 +67,7 @@ public class EDIMarshaller {
     }
     
     protected static <T> void processSegmentsAndSegmentGroups(EDIMessage message, T obj, Writer writer) throws Exception {
-    	Class clazz = obj.getClass();
+    	Class<?> clazz = obj.getClass();
     	
     	//now, loop through all segments.
         for(int i=0, j=clazz.getDeclaredFields().length; i<j; i++) {
@@ -52,13 +81,13 @@ public class EDIMarshaller {
         	}
         	
         	if(Collection.class.isAssignableFrom(fieldObj.getClass())) {
-        		Collection collectionObjs = (Collection)fieldObj;
+        		Collection<?> collectionObjs = (Collection<?>)fieldObj;
 
         		if(collectionObjs.size() > 0) {
         			if(!field.isAnnotationPresent(EDICollectionType.class)) {
         				throw new EDIMessageException("@EDICollectionType Annotation is required for field: "+field.getName());
         			}
-        			Class testClass = field.getAnnotation(EDICollectionType.class).value();
+        			Class<?> testClass = field.getAnnotation(EDICollectionType.class).value();
         			
         			if(testClass.isAnnotationPresent(EDISegment.class)) {
         				writeMultiSegments(message, collectionObjs, writer);
@@ -112,7 +141,7 @@ public class EDIMarshaller {
     }
     
     protected static <T> void writeMultiSegmentGroups(EDIMessage message, T obj, Writer writer) throws Exception {
-		Collection collectionObjs = (Collection)obj;
+		Collection<?> collectionObjs = (Collection<?>)obj;
 		Object testObject = collectionObjs.iterator().next();
 		Class<T> clazz = (Class<T>)testObject.getClass();
 
@@ -149,7 +178,7 @@ public class EDIMarshaller {
     }
     
     protected static <T> void writeMultiSegments(EDIMessage message, T obj, Writer writer) throws Exception {
-    	Collection collectionObjs = (Collection)obj;
+    	Collection<?> collectionObjs = (Collection<?>)obj;
 		
     	for(Object collectionObj : collectionObjs) {
 				writeSegment(message, collectionObj, writer);
@@ -185,7 +214,7 @@ public class EDIMarshaller {
         	writeField(message, field, obj, writer);
         }  
         
-        writer.append(message.segmentDelimiter());
+        writer.append(message.segmentDelimiter()).append("\n");
     }
     
     protected static <T> void writeField(EDIMessage message, Field field, T obj, Writer writer) throws Exception {
@@ -202,7 +231,7 @@ public class EDIMarshaller {
     		if(Collection.class.isAssignableFrom(value.getClass())) {
     			StringBuilder componentField = new StringBuilder();
     			
-    			Collection collectionObjs = (Collection)value;
+    			Collection<?> collectionObjs = (Collection<?>)value;
     			int i=0;
     			for(Object collectionObj : collectionObjs) {
         			//get the component...

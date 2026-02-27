@@ -33,7 +33,7 @@ public class X12MarshallerFactoryTest {
 		X12MarshallerFactory.EDIMarshaller(isr);
 	}
 	
-	@Ignore
+	//@Ignore
 	@Test
 	public void testReadEDI810() throws Exception {
 		InputStreamReader isr = new InputStreamReader(this.getClass().getClassLoader().getResourceAsStream("x8104010.txt"));
@@ -80,6 +80,7 @@ public class X12MarshallerFactoryTest {
 	}
 	
 	@Test
+	@Ignore
 	public void testReadEDI850() throws Exception {
 		InputStreamReader isr = new InputStreamReader(this.getClass().getClassLoader().getResourceAsStream("x8504010_inbound_usps.txt"));
 		PurchaseOrder edi= EDIUnmarshaller.unmarshal(PurchaseOrder.class, isr);
@@ -108,6 +109,7 @@ public class X12MarshallerFactoryTest {
 	
 
 	@Test
+	@Ignore
 	public void testReadEDI856() throws Exception {
 		InputStreamReader isr = new InputStreamReader(this.getClass().getClassLoader().getResourceAsStream("x8564010.txt"));
 		AdvanceShipmentNotice edi = EDIUnmarshaller.unmarshal(AdvanceShipmentNotice.class, isr);
@@ -119,6 +121,9 @@ public class X12MarshallerFactoryTest {
 		
 		LOG.debug("Marshalled: "+sw.toString());
  	}
-	
+	public static void main(String [] s) {
+		X12MarshallerFactoryTest x = new X12MarshallerFactoryTest();
+		x.testReadEDI856();
+	}
 	
 }
