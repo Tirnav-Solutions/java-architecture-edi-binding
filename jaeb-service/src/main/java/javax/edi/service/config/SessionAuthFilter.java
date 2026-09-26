@@ -36,8 +36,10 @@ public class SessionAuthFilter implements Filter {
             return;
         }
 
-        // Exempt login and signup pages
-        if (path.equals("/ui/login") || path.equals("/ui/signup")) {
+        // Exempt login, signup, and demo pages
+        if (path.equals("/ui/login") || path.equals("/ui/signup")
+                || path.equals("/ui/delfor-viewer")
+                || path.equals("/ui/po-viewer")) {
             chain.doFilter(request, response);
             return;
         }

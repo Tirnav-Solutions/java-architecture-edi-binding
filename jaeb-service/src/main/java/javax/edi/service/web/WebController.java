@@ -1,10 +1,18 @@
 package javax.edi.service.web;
 
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.edi.bind.EDIFACTUnmarshalResult;
+import javax.edi.bind.EDIFACTUnmarshaller;
+import javax.edi.bind.EDIUnmarshalResult;
+import javax.edi.bind.EDIUnmarshaller;
+//import javax.edi.model.edifact.delfor.d96a.DelforD96A;
+import javax.edi.model.x12.edi850.PurchaseOrder;
 import javax.edi.service.entity.ClientUser;
 import javax.edi.service.entity.CommunicationChannel;
 import javax.edi.service.entity.EDITransactionLog;
@@ -20,6 +28,7 @@ import javax.edi.service.service.TradingPartnerService;
 import javax.servlet.http.HttpSession;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -305,7 +314,7 @@ public class WebController {
                         txn.setErrorMessage(null);
                         txn.setProcessedAt(java.time.LocalDateTime.now());
                         txnRepo.save(txn);
-                        ra.addFlashAttribute("message", "Transaction reprocessed — Status: " + txn.getStatus());
+                        ra.addFlashAttribute("message", "Transaction reprocessed Ã¢ÂÂ Status: " + txn.getStatus());
                     } catch (Exception e) {
                         txn.setStatus(Status.ERROR);
                         txn.setErrorMessage(e.getMessage());
@@ -642,11 +651,11 @@ public class WebController {
                     javax.edi.service.channel.ChannelTestService.TestResult result = channelTestService.test(ch);
                     if (result.isSuccess()) {
                         ra.addFlashAttribute("message",
-                                "â " + ch.getProtocol() + " â " + result.getMessage()
+                                "ÃÂ¢ÃÂÃÂ " + ch.getProtocol() + " ÃÂ¢ÃÂÃÂ " + result.getMessage()
                                 + " (" + result.getElapsedMs() + " ms)");
                     } else {
                         ra.addFlashAttribute("error",
-                                "â " + ch.getProtocol() + " â " + result.getMessage()
+                                "ÃÂ¢ÃÂÃÂ " + ch.getProtocol() + " ÃÂ¢ÃÂÃÂ " + result.getMessage()
                                 + " (" + result.getElapsedMs() + " ms)");
                     }
                     return "redirect:/ui/partners/" + ch.getPartnerId();
@@ -733,6 +742,96 @@ public class WebController {
         });
         ra.addFlashAttribute("message", "User enabled");
         return "redirect:/ui/users";
+    }
+
+    // ======================== DELFOR D96A VIEWER (DEMO) ========================
+
+//    @GetMapping("/delfor-viewer")
+//    public String delforViewer(HttpSession session, Model model) {
+//        ClientUser user = currentUser(session);
+//        model.addAttribute("activeTab", "delfor-viewer");
+//        model.addAttribute("currentUser", user);
+//
+//        try {
+//            // Read the embedded DELFORD96A.edi file
+//            ClassPathResource res = new ClassPathResource("static/data/DELFORD96A.edi");
+//            String rawEdi = new String(res.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+//            model.addAttribute("rawEdi", rawEdi);
+//
+//            // Parse using the JAEB EDIFACT unmarshaller
+//            EDIFACTUnmarshalResult<DelforD96A> result =
+//                    EDIFACTUnmarshaller.unmarshal(DelforD96A.class, new StringReader(rawEdi));
+//
+//            model.addAttribute("parsed", result.isParsed());
+//            model.addAttribute("segmentCount", result.getSegmentCount());
+//            model.addAttribute("parseTimeMs", result.getParseTimeMillis());
+//            model.addAttribute("senderIdentification", result.getSenderIdentification());
+//            model.addAttribute("receiverIdentification", result.getReceiverIdentification());
+//            model.addAttribute("interchangeReference", result.getInterchangeReference());
+//            model.addAttribute("messageType", result.getMessageType());
+//            model.addAttribute("messageVersion", result.getMessageVersion());
+//            model.addAttribute("messageRelease", result.getMessageRelease());
+//
+//            DelforD96A delfor = result.getData();
+//            if (delfor != null) {
+//                model.addAttribute("delfor", delfor);
+//
+//                // Convert to JSON for the JSON tab
+//                com.fasterxml.jackson.databind.ObjectMapper mapper =
+//                        new com.fasterxml.jackson.databind.ObjectMapper();
+//                mapper.setSerializationInclusion(
+//                        com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+//                String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(delfor);
+//                model.addAttribute("jsonOutput", json);
+//            }
+//        } catch (Exception e) {
+//            model.addAttribute("parsed", false);
+//            model.addAttribute("parseError", e.getMessage());
+//        }
+//
+//        return "delfor-viewer";
+//    }
+
+    // ======================== X12 850 PURCHASE ORDER VIEWER (DEMO) ========================
+
+    @GetMapping("/po-viewer")
+    public String poViewer(HttpSession session, Model model) {
+        ClientUser user = currentUser(session);
+        model.addAttribute("activeTab", "po-viewer");
+        model.addAttribute("currentUser", user);
+
+        try {
+            ClassPathResource res = new ClassPathResource("static/data/850.edi");
+            String rawEdi = new String(res.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            model.addAttribute("rawEdi", rawEdi);
+
+            EDIUnmarshalResult<PurchaseOrder> result =
+                    EDIUnmarshaller.unmarshalResult(PurchaseOrder.class, new StringReader(rawEdi));
+
+            model.addAttribute("parsed", result.isParsed());
+            model.addAttribute("segmentCount", result.getSegmentCount());
+            model.addAttribute("parseTimeMs", result.getParseTimeMillis());
+
+            PurchaseOrder po = result.getData();
+            if (po != null) {
+                model.addAttribute("po", po);
+
+                // Convert to JSON for the JSON tab
+                com.fasterxml.jackson.databind.ObjectMapper mapper =
+                        new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.setSerializationInclusion(
+                        com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+                mapper.configure(
+                        com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+                String json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(po);
+                model.addAttribute("jsonOutput", json);
+            }
+        } catch (Exception e) {
+            model.addAttribute("parsed", false);
+            model.addAttribute("parseError", e.getMessage());
+        }
+
+        return "po-viewer";
     }
 
     // ======================== HELPERS ========================

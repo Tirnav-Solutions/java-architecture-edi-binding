@@ -159,6 +159,44 @@ public class CommunicationChannel {
     @Column(length = 1000)
     private String httpCustomHeaders;
 
+    // ===== OFTP2 specific =====
+
+    /** OFTP2 local SSID (Station Session Identification). */
+    @Column(length = 25)
+    private String oftp2LocalSsid;
+
+    /** OFTP2 partner SFID (Station File Identification). */
+    @Column(length = 25)
+    private String oftp2PartnerSfid;
+
+    /** OFTP2 virtual filename format for outbound files. */
+    @Column(length = 200)
+    private String oftp2VirtualFilename;
+
+    /** Whether to use TLS for OFTP2 (mandatory for OFTP2 over TCP/IP). */
+    private boolean oftp2UseTls = true;
+
+    /** Whether to request signed EERP (End-to-End Response). */
+    private boolean oftp2RequestSignedEerp;
+
+    /** Whether to compress data using OFTP2 compression. */
+    private boolean oftp2Compress;
+
+    /** PEM-encoded local certificate for OFTP2 TLS + signing. */
+    @Lob
+    @Column(columnDefinition = "CLOB")
+    private String oftp2LocalCertificate;
+
+    /** PEM-encoded local private key for OFTP2 TLS + decryption. */
+    @Lob
+    @Column(columnDefinition = "CLOB")
+    private String oftp2LocalPrivateKey;
+
+    /** PEM-encoded partner certificate for OFTP2 signature verification + encryption. */
+    @Lob
+    @Column(columnDefinition = "CLOB")
+    private String oftp2PartnerCertificate;
+
     // ===== Scheduling =====
 
     /** Poll interval in milliseconds (for inbound channels). 0 = manual only. */
@@ -181,7 +219,7 @@ public class CommunicationChannel {
 
     // ===== Enums =====
 
-    public enum Protocol { SFTP, FTP, AS2, HTTP }
+    public enum Protocol { SFTP, FTP, AS2, HTTP, OFTP2 }
     public enum Direction { INBOUND, OUTBOUND }
     public enum ChannelStatus { ACTIVE, DISABLED, ERROR }
 
@@ -309,4 +347,24 @@ public class CommunicationChannel {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime v) { this.updatedAt = v; }
+
+    // OFTP2
+    public String getOftp2LocalSsid() { return oftp2LocalSsid; }
+    public void setOftp2LocalSsid(String v) { this.oftp2LocalSsid = v; }
+    public String getOftp2PartnerSfid() { return oftp2PartnerSfid; }
+    public void setOftp2PartnerSfid(String v) { this.oftp2PartnerSfid = v; }
+    public String getOftp2VirtualFilename() { return oftp2VirtualFilename; }
+    public void setOftp2VirtualFilename(String v) { this.oftp2VirtualFilename = v; }
+    public boolean isOftp2UseTls() { return oftp2UseTls; }
+    public void setOftp2UseTls(boolean v) { this.oftp2UseTls = v; }
+    public boolean isOftp2RequestSignedEerp() { return oftp2RequestSignedEerp; }
+    public void setOftp2RequestSignedEerp(boolean v) { this.oftp2RequestSignedEerp = v; }
+    public boolean isOftp2Compress() { return oftp2Compress; }
+    public void setOftp2Compress(boolean v) { this.oftp2Compress = v; }
+    public String getOftp2LocalCertificate() { return oftp2LocalCertificate; }
+    public void setOftp2LocalCertificate(String v) { this.oftp2LocalCertificate = v; }
+    public String getOftp2LocalPrivateKey() { return oftp2LocalPrivateKey; }
+    public void setOftp2LocalPrivateKey(String v) { this.oftp2LocalPrivateKey = v; }
+    public String getOftp2PartnerCertificate() { return oftp2PartnerCertificate; }
+    public void setOftp2PartnerCertificate(String v) { this.oftp2PartnerCertificate = v; }
 }

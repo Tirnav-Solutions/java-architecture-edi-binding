@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Order (850) Viewer — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── Tab navigation ──────────────────────── */
+        .viewer-tabs {
+            display: flex; background: #fff;
+            border-bottom: 2px solid var(--gray-200);
+            margin-bottom: 24px;
+            border-radius: var(--radius) var(--radius) 0 0;
+            overflow: hidden;
+        }
+        .viewer-tab {
+            padding: 12px 24px; font-size: .85rem; font-weight: 600;
+            color: var(--gray-500); cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all .15s; background: none; border-top: none; border-left: none; border-right: none;
+        }
+        .viewer-tab:hover { color: var(--primary); background: var(--primary-light); }
+        .viewer-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: #fff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Purchase Order Document ──────────────── */
+        .po-document {
+            background: #fff; border: 1px solid var(--gray-200);
+            border-radius: var(--radius); box-shadow: var(--shadow);
+            max-width: 1100px; margin: 0 auto;
+        }
+
+        /* Header Banner */
+        .po-banner {
+            background: linear-gradient(135deg, #1e3a5f 0%, #1a56db 100%);
+            color: #fff; padding: 32px 40px;
+            border-radius: var(--radius) var(--radius) 0 0;
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
+        .po-banner-left h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: 4px; }
+        .po-banner-left .po-subtitle { font-size: .85rem; opacity: .8; }
+        .po-banner-right { text-align: right; }
+        .po-banner-right .po-number { font-size: 1.5rem; font-weight: 800; letter-spacing: .02em; }
+        .po-banner-right .po-date { font-size: .85rem; opacity: .8; margin-top: 4px; }
+
+        .po-status-badge {
+            display: inline-block; padding: 4px 14px; border-radius: 100px;
+            font-size: .72rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; margin-top: 8px;
+            background: rgba(255,255,255,.2); backdrop-filter: blur(4px);
+        }
+        .po-status-badge.original { background: rgba(5,150,105,.3); }
+        .po-status-badge.new { background: rgba(217,119,6,.3); }
+
+        /* ISA/GS Envelope Info Bar */
+        .po-envelope-bar {
+            display: flex; flex-wrap: wrap; gap: 20px;
+            padding: 12px 40px; background: var(--gray-50);
+            border-bottom: 1px solid var(--gray-200);
+            font-size: .75rem; color: var(--gray-500);
+        }
+        .po-envelope-bar .env-item { display: flex; align-items: center; gap: 6px; }
+        .po-envelope-bar .env-label { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+        .po-envelope-bar .env-value { color: var(--gray-700); font-family: 'Cascadia Code','Fira Code',monospace; }
+
+        /* Section body */
+        .po-body { padding: 32px 40px; }
+
+        /* Party Cards (Bill To / Ship To / Supplier) */
+        .party-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px; margin-bottom: 32px;
+        }
+        .party-card {
+            border: 1px solid var(--gray-200); border-radius: var(--radius);
+            overflow: hidden; background: #fff;
+        }
+        .party-card-header {
+            padding: 10px 16px; font-size: .72rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .06em;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .party-card-header .party-icon {
+            width: 28px; height: 28px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: .9rem; color: #fff;
+        }
+        .party-card-header.buyer { background: #eff6ff; color: #1e40af; }
+        .party-card-header.buyer .party-icon { background: #1a56db; }
+        .party-card-header.supplier { background: #f0fdf4; color: #065f46; }
+        .party-card-header.supplier .party-icon { background: #059669; }
+        .party-card-header.ship-to { background: #fef3c7; color: #92400e; }
+        .party-card-header.ship-to .party-icon { background: #d97706; }
+        .party-card-header.pay-to { background: #fce7f3; color: #9d174d; }
+        .party-card-header.pay-to .party-icon { background: #db2777; }
+        .party-card-header.default { background: var(--gray-100); color: var(--gray-700); }
+        .party-card-header.default .party-icon { background: var(--gray-500); }
+
+        .party-card-body { padding: 16px; }
+        .party-card-body .party-name { font-size: .95rem; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
+        .party-card-body .party-address { font-size: .82rem; color: var(--gray-600); line-height: 1.6; }
+        .party-card-body .party-id {
+            margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--gray-100);
+            font-size: .75rem; color: var(--gray-500);
+        }
+        .party-card-body .party-id code {
+            background: var(--gray-100); padding: 1px 6px; border-radius: 3px;
+            font-family: 'Cascadia Code','Fira Code',monospace; font-size: .72rem;
+            color: var(--gray-700);
+        }
+
+        /* Reference Info Section */
+        .ref-section { margin-bottom: 28px; }
+        .ref-section-title {
+            font-size: .78rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; color: var(--gray-500); margin-bottom: 10px;
+            padding-bottom: 6px; border-bottom: 2px solid var(--gray-200);
+        }
+        .ref-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 8px;
+        }
+        .ref-item {
+            display: flex; align-items: baseline; gap: 8px;
+            padding: 8px 12px; background: var(--gray-50);
+            border-radius: 6px; font-size: .82rem;
+        }
+        .ref-item .ref-qual {
+            font-weight: 700; color: var(--primary); font-size: .72rem;
+            text-transform: uppercase; min-width: 30px;
+        }
+        .ref-item .ref-val { color: var(--gray-700); }
+
+        /* Line Items Table */
+        .items-section { margin-top: 32px; }
+        .items-section-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .items-section-header h2 {
+            font-size: 1rem; font-weight: 700; color: var(--gray-900);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .items-section-header .item-count {
+            background: var(--primary); color: #fff; font-size: .72rem;
+            padding: 2px 10px; border-radius: 100px; font-weight: 700;
+        }
+
+        .line-items-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        .line-items-table thead th {
+            background: var(--gray-800); color: #fff;
+            padding: 10px 14px; text-align: left;
+            font-weight: 600; font-size: .72rem;
+            text-transform: uppercase; letter-spacing: .04em;
+            white-space: nowrap;
+        }
+        .line-items-table thead th:first-child { border-radius: var(--radius) 0 0 0; }
+        .line-items-table thead th:last-child { border-radius: 0 var(--radius) 0 0; }
+        .line-items-table tbody tr { border-bottom: 1px solid var(--gray-100); transition: background .1s; }
+        .line-items-table tbody tr:hover { background: #f0f7ff; }
+        .line-items-table tbody td { padding: 12px 14px; vertical-align: top; }
+        .line-items-table tbody td.line-no {
+            font-weight: 700; color: var(--gray-400); text-align: center; width: 50px;
+        }
+        .line-items-table tbody td.item-ids {
+            max-width: 200px;
+        }
+        .line-items-table .id-pair {
+            display: flex; gap: 4px; align-items: baseline; margin-bottom: 2px;
+        }
+        .line-items-table .id-qual {
+            font-size: .65rem; font-weight: 700; color: var(--gray-400);
+            text-transform: uppercase; min-width: 22px;
+        }
+        .line-items-table .id-val {
+            font-family: 'Cascadia Code','Fira Code',monospace; font-size: .78rem;
+            color: var(--gray-700);
+        }
+        .line-items-table .qty-cell {
+            font-weight: 700; color: var(--gray-900); font-size: .95rem;
+            text-align: right;
+        }
+        .line-items-table .uom-cell { color: var(--gray-500); font-size: .78rem; }
+        .line-items-table .price-cell {
+            font-weight: 700; color: var(--gray-900); text-align: right;
+            font-size: .95rem;
+        }
+        .line-items-table .ext-cell {
+            font-weight: 800; color: var(--primary-dark); text-align: right;
+            font-size: .95rem;
+        }
+        .line-items-table .desc-cell { color: var(--gray-600); font-size: .8rem; font-style: italic; }
+
+        /* Totals Footer */
+        .line-items-table tfoot td {
+            padding: 14px; font-weight: 700; font-size: .9rem;
+            border-top: 2px solid var(--gray-300);
+        }
+        .line-items-table tfoot .total-label {
+            text-align: right; color: var(--gray-600); text-transform: uppercase;
+            font-size: .78rem; letter-spacing: .04em;
+        }
+        .line-items-table tfoot .total-value {
+            text-align: right; color: var(--primary-dark);
+            font-size: 1.15rem; font-weight: 800;
+        }
+
+        /* Notes Panel */
+        .notes-panel { margin-top: 28px; }
+        .notes-panel .note-block {
+            background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius);
+            padding: 16px 20px; margin-bottom: 12px;
+        }
+        .notes-panel .note-title {
+            font-size: .75rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .06em; color: #92400e; margin-bottom: 8px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .notes-panel .note-text {
+            font-size: .82rem; color: #78350f; line-height: 1.7;
+            white-space: pre-wrap; font-family: 'Cascadia Code','Fira Code',monospace;
+        }
+
+        /* Multiple PO Banner */
+        .po-selector {
+            display: flex; gap: 8px; align-items: center;
+            padding: 12px 40px; background: var(--primary-light);
+            border-bottom: 1px solid #bfdbfe;
+            font-size: .82rem; color: var(--primary-dark);
+        }
+        .po-selector .po-tab {
+            padding: 6px 16px; border-radius: 100px; font-weight: 600;
+            cursor: pointer; border: 1px solid var(--primary);
+            background: #fff; color: var(--primary); font-size: .78rem;
+            transition: all .15s;
+        }
+        .po-selector .po-tab.active { background: var(--primary); color: #fff; }
+        .po-selector .po-tab:hover { background: var(--primary); color: #fff; }
+
+        /* Raw EDI */
+        .edi-raw {
+            background: var(--gray-900); color: #e5e7eb;
+            padding: 20px 24px; border-radius: var(--radius);
+            font-family: 'Cascadia Code','Fira Code',monospace;
+            font-size: .78rem; line-height: 1.7;
+            overflow-x: auto; white-space: pre-wrap;
+            max-height: 500px; overflow-y: auto;
+            counter-reset: line;
+        }
+        .edi-raw .edi-line { display: block; }
+        .edi-raw .edi-line::before {
+            counter-increment: line; content: counter(line);
+            display: inline-block; width: 36px; margin-right: 16px;
+            text-align: right; color: var(--gray-600); font-size: .7rem;
+            user-select: none;
+        }
+        .seg-isa, .seg-iea { color: #f472b6; }
+        .seg-gs, .seg-ge { color: #c084fc; }
+        .seg-st, .seg-se { color: #60a5fa; }
+        .seg-beg { color: #34d399; font-weight: 700; }
+        .seg-n1 { color: #fbbf24; }
+        .seg-n3, .seg-n4 { color: #fcd34d; }
+        .seg-po1 { color: #4ade80; font-weight: 600; }
+        .seg-ref { color: #a78bfa; }
+        .seg-ctt { color: #f87171; }
+        .seg-default { color: #94a3b8; }
+
+        /* JSON output */
+        .json-output {
+            background: var(--gray-900); color: #a5f3fc;
+            padding: 20px 24px; border-radius: var(--radius);
+            font-family: 'Cascadia Code','Fira Code',monospace;
+            font-size: .75rem; line-height: 1.6;
+            overflow: auto; max-height: 600px;
+            white-space: pre-wrap;
+        }
+
+        /* Print Styles */
+        .po-print-bar {
+            display: flex; justify-content: flex-end; gap: 10px; padding: 12px 40px;
+            border-bottom: 1px solid var(--gray-200); background: #fff;
+        }
+
+        @media print {
+            .sidebar, .topbar, .viewer-tabs, .po-print-bar, .po-selector, .po-envelope-bar { display: none !important; }
+            .main { margin-left: 0 !important; }
+            .po-document { box-shadow: none; border: none; }
+            .po-banner { background: #1a56db !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div th:replace="fragments/layout :: sidebar"></div>
+
+    <div class="main">
+        <div class="topbar">
+            <h1>&#128196; EDI 850 — Purchase Order Viewer</h1>
+            <div class="topbar-right">
+                <span class="badge badge-primary">X12</span>
+                <span class="badge badge-success">850</span>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Parse Error -->
+            <div th:if="${parseError}" class="alert alert-danger mb-4">
+                <strong>Parse Error:</strong> <span th:text="${parseError}"></span>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="viewer-tabs">
+                <button class="viewer-tab active" onclick="switchTab('purchase-order')">&#128196; Purchase Order</button>
+                <button class="viewer-tab" onclick="switchTab('raw-edi')">&#128221; Raw EDI</button>
+                <button class="viewer-tab" onclick="switchTab('json')">{ } Parsed JSON</button>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════ -->
+            <!-- TAB 1: PURCHASE ORDER DOCUMENT VIEW                -->
+            <!-- ═══════════════════════════════════════════════════ -->
+            <div id="tab-purchase-order" class="tab-content active" th:if="${po != null}">
+
+                <!-- Multiple PO selector (if > 1) -->
+                <div th:if="${po.purchaseOrderBody != null and #lists.size(po.purchaseOrderBody) > 1}" class="po-selector" style="margin-bottom: 16px; border-radius: var(--radius);">
+                    <span style="font-weight:700;">Purchase Orders:</span>
+                    <th:block th:each="body, stat : ${po.purchaseOrderBody}">
+                        <button class="po-tab" th:classappend="${stat.index == 0} ? 'active'"
+                                th:text="'PO #' + (${body.header?.beginningSegment?.purchaseOrderNumber} != null ? ${body.header.beginningSegment.purchaseOrderNumber} : (stat.index + 1))"
+                                th:onclick="'showPO(' + ${stat.index} + ')'"></button>
+                    </th:block>
+                </div>
+
+                <th:block th:each="body, stat : ${po.purchaseOrderBody}">
+                <div class="po-document" th:id="'po-doc-' + ${stat.index}"
+                     th:style="${stat.index > 0} ? 'display:none' : ''">
+
+                    <!-- ── BANNER ── -->
+                    <div class="po-banner">
+                        <div class="po-banner-left">
+                            <h1>Purchase Order</h1>
+                            <div class="po-subtitle">EDI X12 Transaction Set 850</div>
+                            <div class="po-status-badge original"
+                                 th:text="${body.header?.beginningSegment?.transactionSetPurposeCode == '00'} ? 'Original' : ('Purpose: ' + ${body.header?.beginningSegment?.transactionSetPurposeCode})">
+                            </div>
+                        </div>
+                        <div class="po-banner-right">
+                            <div class="po-number" th:text="'#' + ${body.header?.beginningSegment?.purchaseOrderNumber}"></div>
+                            <div class="po-date" th:if="${body.header?.beginningSegment?.purchaseOrderDate != null}">
+                                <span>Date: </span>
+                                <strong th:text="${#dates.format(body.header.beginningSegment.purchaseOrderDate, 'MMMM dd, yyyy')}"></strong>
+                            </div>
+                            <div class="po-date" th:if="${body.header?.beginningSegment?.purchaseOrderTypeCode != null}">
+                                <span th:switch="${body.header.beginningSegment.purchaseOrderTypeCode}">
+                                    <span th:case="'NE'">Type: New Order</span>
+                                    <span th:case="'SA'">Type: Stand-Alone</span>
+                                    <span th:case="'DS'">Type: Drop Ship</span>
+                                    <span th:case="'OS'">Type: Will Call</span>
+                                    <span th:case="*" th:text="'Type: ' + ${body.header.beginningSegment.purchaseOrderTypeCode}"></span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── ENVELOPE INFO BAR ── -->
+                    <div class="po-envelope-bar">
+                        <div class="env-item" th:if="${po.envelopeHeader != null}">
+                            <span class="env-label">Sender:</span>
+                            <span class="env-value" th:text="${po.envelopeHeader.interchangeSenderID}"></span>
+                        </div>
+                        <div class="env-item" th:if="${po.envelopeHeader != null}">
+                            <span class="env-label">Receiver:</span>
+                            <span class="env-value" th:text="${po.envelopeHeader.interchangeReceiverID}"></span>
+                        </div>
+                        <div class="env-item" th:if="${po.envelopeHeader?.interchangeControlNumber != null}">
+                            <span class="env-label">ICN:</span>
+                            <span class="env-value" th:text="${po.envelopeHeader.interchangeControlNumber}"></span>
+                        </div>
+                        <div class="env-item" th:if="${po.envelopeHeader?.testIndicator != null}">
+                            <span class="env-label">Mode:</span>
+                            <span class="env-value" th:text="${po.envelopeHeader.testIndicator == 'T'} ? 'TEST' : 'PRODUCTION'"></span>
+                        </div>
+                        <div class="env-item" th:if="${segmentCount != null}">
+                            <span class="env-label">Segments:</span>
+                            <span class="env-value" th:text="${segmentCount}"></span>
+                        </div>
+                        <div class="env-item" th:if="${parseTimeMs != null}">
+                            <span class="env-label">Parsed:</span>
+                            <span class="env-value" th:text="${parseTimeMs} + ' ms'"></span>
+                        </div>
+                    </div>
+
+                    <!-- ── PRINT BAR ── -->
+                    <div class="po-print-bar">
+                        <button class="btn btn-outline btn-sm" onclick="window.print()">&#128424; Print</button>
+                    </div>
+
+                    <div class="po-body">
+
+                        <!-- ── TRADING PARTNER CARDS ── -->
+                        <div class="party-grid" th:if="${body.header?.shippingBillingGroups != null}">
+                            <th:block th:each="sbg : ${body.header.shippingBillingGroups}">
+                                <div class="party-card" th:if="${sbg.name != null}">
+                                    <div class="party-card-header"
+                                         th:classappend="${sbg.name.entityIdentifierCode == 'BY'} ? 'buyer' :
+                                                         (${sbg.name.entityIdentifierCode == 'ST'} ? 'ship-to' :
+                                                         (${sbg.name.entityIdentifierCode == 'SU' or sbg.name.entityIdentifierCode == 'SE'} ? 'supplier' :
+                                                         (${sbg.name.entityIdentifierCode == 'RI' or sbg.name.entityIdentifierCode == 'BT'} ? 'pay-to' : 'default')))">
+                                        <div class="party-icon">
+                                            <span th:if="${sbg.name.entityIdentifierCode == 'BY'}">&#127970;</span>
+                                            <span th:if="${sbg.name.entityIdentifierCode == 'ST'}">&#128666;</span>
+                                            <span th:if="${sbg.name.entityIdentifierCode == 'SU' or sbg.name.entityIdentifierCode == 'SE'}">&#127981;</span>
+                                            <span th:if="${sbg.name.entityIdentifierCode == 'RI' or sbg.name.entityIdentifierCode == 'BT'}">&#128179;</span>
+                                            <span th:if="${sbg.name.entityIdentifierCode != 'BY' and sbg.name.entityIdentifierCode != 'ST' and sbg.name.entityIdentifierCode != 'SU' and sbg.name.entityIdentifierCode != 'SE' and sbg.name.entityIdentifierCode != 'RI' and sbg.name.entityIdentifierCode != 'BT'}">&#128101;</span>
+                                        </div>
+                                        <span th:switch="${sbg.name.entityIdentifierCode}">
+                                            <span th:case="'BY'">Buyer / Bill To</span>
+                                            <span th:case="'BT'">Bill To</span>
+                                            <span th:case="'ST'">Ship To</span>
+                                            <span th:case="'SU'">Supplier / Vendor</span>
+                                            <span th:case="'SE'">Seller</span>
+                                            <span th:case="'RI'">Remit To / Pay To</span>
+                                            <span th:case="*" th:text="'Party (' + ${sbg.name.entityIdentifierCode} + ')'"></span>
+                                        </span>
+                                    </div>
+                                    <div class="party-card-body">
+                                        <div class="party-name" th:text="${sbg.name.name}"></div>
+                                        <div class="party-address">
+                                            <div th:if="${sbg.addressInformation != null}">
+                                                <span th:text="${sbg.addressInformation.addressLine1}"></span>
+                                                <br th:if="${sbg.addressInformation.addressLine2 != null}"/>
+                                                <span th:if="${sbg.addressInformation.addressLine2 != null}" th:text="${sbg.addressInformation.addressLine2}"></span>
+                                            </div>
+                                            <div th:if="${sbg.geographicLocation != null}">
+                                                <span th:text="${sbg.geographicLocation.cityName}"></span><span th:if="${sbg.geographicLocation.stateOrProvinceCode != null}">, <span th:text="${sbg.geographicLocation.stateOrProvinceCode}"></span></span>
+                                                <span th:if="${sbg.geographicLocation.postalCode != null}" th:text="' ' + ${sbg.geographicLocation.postalCode}"></span>
+                                                <span th:if="${sbg.geographicLocation.countryCode != null}" th:text="' ' + ${sbg.geographicLocation.countryCode}"></span>
+                                            </div>
+                                        </div>
+                                        <div class="party-id" th:if="${sbg.name.identificationCode != null}">
+                                            <span th:switch="${sbg.name.identificationCodeQualifier}">
+                                                <span th:case="'UL'">GLN: </span>
+                                                <span th:case="'92'">Vendor #: </span>
+                                                <span th:case="'01'">DUNS: </span>
+                                                <span th:case="*" th:text="${sbg.name.identificationCodeQualifier != null} ? ${sbg.name.identificationCodeQualifier} + ': ' : 'ID: '"></span>
+                                            </span>
+                                            <code th:text="${sbg.name.identificationCode}"></code>
+                                        </div>
+                                    </div>
+                                </div>
+                            </th:block>
+                        </div>
+
+                        <!-- ── REFERENCE NUMBERS ── -->
+                        <div class="ref-section" th:if="${body.header?.referenceNumbers != null and #lists.size(body.header.referenceNumbers) > 0}">
+                            <div class="ref-section-title">&#128278; Reference Numbers</div>
+                            <div class="ref-grid">
+                                <div class="ref-item" th:each="ref : ${body.header.referenceNumbers}">
+                                    <span class="ref-qual" th:text="${ref.referenceIdentificationQualifier}"></span>
+                                    <span class="ref-val" th:text="${ref.referenceIdentification}"></span>
+                                    <span th:if="${ref.referenceDescription != null}" class="text-muted text-sm" th:text="'(' + ${ref.referenceDescription} + ')'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ── NOTES & SPECIAL INSTRUCTIONS ── -->
+                        <div class="notes-panel" th:if="${body.header?.referenceIdentifications != null and #lists.size(body.header.referenceIdentifications) > 0}">
+                            <div class="ref-section-title">&#128221; Notes &amp; Special Instructions</div>
+                            <th:block th:each="n9 : ${body.header.referenceIdentifications}">
+                                <div class="note-block">
+                                    <div class="note-title">
+                                        &#9888;&#65039;
+                                        <span th:switch="${n9.referenceIdentification}">
+                                            <span th:case="'SPECIAL INSTRUCTIONS'">Special Instructions</span>
+                                            <span th:case="'SPH'">Special Handling Instructions</span>
+                                            <span th:case="'LAB'">Label Instructions</span>
+                                            <span th:case="'ORI'">Dealer Information</span>
+                                            <span th:case="*" th:text="${n9.referenceIdentification != null ? n9.referenceIdentification : n9.referenceIdentificationQualifier}"></span>
+                                        </span>
+                                    </div>
+                                    <div class="note-text" th:if="${n9.freeFormMessage != null}" th:text="${n9.freeFormMessage}"></div>
+                                </div>
+                            </th:block>
+                        </div>
+
+                        <!-- ── LINE ITEMS ── -->
+                        <div class="items-section" th:if="${body.detail?.purchaseOrderItems != null}">
+                            <div class="items-section-header">
+                                <h2>
+                                    &#128230; Line Items
+                                    <span class="item-count" th:text="${#lists.size(body.detail.purchaseOrderItems)}"></span>
+                                </h2>
+                            </div>
+
+                            <div class="table-wrapper" style="max-height: none;">
+                                <table class="line-items-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:50px;text-align:center;">#</th>
+                                            <th>Product IDs</th>
+                                            <th>Description</th>
+                                            <th style="text-align:right;">Qty</th>
+                                            <th>UOM</th>
+                                            <th style="text-align:right;">Unit Price</th>
+                                            <th style="text-align:right;">Extended</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr th:each="item : ${body.detail.purchaseOrderItems}">
+                                            <!-- Line # -->
+                                            <td class="line-no" th:text="${item.baselineItemData?.assignedIdentifier}"></td>
+
+                                            <!-- Product IDs -->
+                                            <td class="item-ids">
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID1 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServiceIDQualifier1}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID1}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID2 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual2}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID2}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID3 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual3}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID3}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID4 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual4}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID4}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID5 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual5}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID5}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID6 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual6}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID6}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID7 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual7}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID7}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID8 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual8}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID8}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID9 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual9}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID9}"></span>
+                                                </div>
+                                                <div class="id-pair" th:if="${item.baselineItemData?.prodServID10 != null}">
+                                                    <span class="id-qual" th:text="${item.baselineItemData.prodServIDQual10}"></span>
+                                                    <span class="id-val" th:text="${item.baselineItemData.prodServID10}"></span>
+                                                </div>
+                                            </td>
+
+                                            <!-- Description -->
+                                            <td class="desc-cell" th:text="${item.itemDescription?.description}">—</td>
+
+                                            <!-- Quantity -->
+                                            <td class="qty-cell" th:text="${item.baselineItemData?.quantity}"></td>
+
+                                            <!-- UOM -->
+                                            <td class="uom-cell">
+                                                <span th:switch="${item.baselineItemData?.unitOfMeasure}">
+                                                    <span th:case="'EA'">Each</span>
+                                                    <span th:case="'CA'">Case</span>
+                                                    <span th:case="'PK'">Pack</span>
+                                                    <span th:case="'BX'">Box</span>
+                                                    <span th:case="'LB'">Pounds</span>
+                                                    <span th:case="'KG'">Kilograms</span>
+                                                    <span th:case="*" th:text="${item.baselineItemData?.unitOfMeasure}"></span>
+                                                </span>
+                                            </td>
+
+                                            <!-- Unit Price -->
+                                            <td class="price-cell">
+                                                <span th:if="${item.baselineItemData?.unitPrice != null}" th:text="'$' + ${#numbers.formatDecimal(item.baselineItemData.unitPrice, 1, 2)}"></span>
+                                            </td>
+
+                                            <!-- Extended Amount -->
+                                            <td class="ext-cell">
+                                                <span th:if="${item.baselineItemData?.unitPrice != null and item.baselineItemData?.quantity != null}"
+                                                      th:text="'$' + ${#numbers.formatDecimal(item.baselineItemData.unitPrice * item.baselineItemData.quantity, 1, 2)}"></span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot th:if="${body.trailer?.transactionSetTotals != null}">
+                                        <tr>
+                                            <td colspan="3" class="total-label">
+                                                Total Line Items:
+                                                <strong th:text="${body.trailer.transactionSetTotals.numberofLineItems}"></strong>
+                                                <span th:if="${body.trailer.transactionSetTotals.hashTotal != null}">
+                                                    &nbsp;&middot;&nbsp; Hash Total: <strong th:text="${body.trailer.transactionSetTotals.hashTotal}"></strong>
+                                                </span>
+                                            </td>
+                                            <td colspan="2"></td>
+                                            <td class="total-label">Grand Total</td>
+                                            <td class="total-value">
+                                                <!-- Sum up from line items since AMT may not be mapped -->
+                                                <span>—</span>
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- ── TRANSACTION FOOTER ── -->
+                        <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--gray-200); display:flex; justify-content:space-between; align-items:center;">
+                            <div style="font-size:.75rem; color: var(--gray-400);">
+                                Parsed by <strong>JAEB EDI Platform</strong>
+                                &nbsp;&middot;&nbsp; EDI X12 850 Purchase Order
+                            </div>
+                            <div style="font-size:.75rem; color:var(--gray-400);">
+                                Transaction Set:
+                                <code style="background:var(--gray-100);padding:1px 6px;border-radius:3px;font-size:.7rem;"
+                                      th:text="${body.header?.transactionSetHeader?.transactionSetIdentifierCode}"></code>
+                                &mdash;
+                                <code style="background:var(--gray-100);padding:1px 6px;border-radius:3px;font-size:.7rem;"
+                                      th:text="${body.header?.transactionSetHeader?.transactionSetControlNumber}"></code>
+                            </div>
+                        </div>
+
+                    </div><!-- .po-body -->
+                </div><!-- .po-document -->
+                </th:block>
+            </div><!-- tab purchase-order -->
+
+            <!-- ═══════════════════════════════════════════════════ -->
+            <!-- TAB 2: RAW EDI                                     -->
+            <!-- ═══════════════════════════════════════════════════ -->
+            <div id="tab-raw-edi" class="tab-content" th:if="${rawEdi != null}">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>&#128221; Raw EDI (850.edi)</h3>
+                        <button class="btn btn-outline btn-sm" onclick="copyRawEdi()">&#128203; Copy</button>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <div class="edi-raw" id="raw-edi-content">
+                            <th:block th:each="line : ${rawEdi.split('~')}">
+                                <span class="edi-line"
+                                      th:classappend="${#strings.startsWith(#strings.trim(line), 'ISA')} ? 'seg-isa' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'IEA')} ? 'seg-iea' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'GS')} ? 'seg-gs' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'GE')} ? 'seg-ge' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'ST')} ? 'seg-st' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'SE')} ? 'seg-se' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'BEG')} ? 'seg-beg' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'N1')} ? 'seg-n1' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'N3')} ? 'seg-n3' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'N4')} ? 'seg-n4' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'PO1')} ? 'seg-po1' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'REF')} ? 'seg-ref' :
+                                                       (${#strings.startsWith(#strings.trim(line), 'CTT')} ? 'seg-ctt' : 'seg-default')))))))))))))"
+                                      th:text="${#strings.trim(line) + '~'}"></span>
+                            </th:block>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════ -->
+            <!-- TAB 3: PARSED JSON                                 -->
+            <!-- ═══════════════════════════════════════════════════ -->
+            <div id="tab-json" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>{ } Parsed JSON Output</h3>
+                        <button class="btn btn-outline btn-sm" onclick="copyJson()">&#128203; Copy</button>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <pre class="json-output" id="json-content" th:text="${jsonOutput}"></pre>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- .content -->
+    </div><!-- .main -->
+
+    <script>
+        // ── Tab switching ──
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.viewer-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // ── Multiple PO switching ──
+        function showPO(index) {
+            document.querySelectorAll('[id^="po-doc-"]').forEach(el => el.style.display = 'none');
+            document.getElementById('po-doc-' + index).style.display = '';
+            document.querySelectorAll('.po-tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // ── Copy functions ──
+        function copyRawEdi() {
+            const text = document.getElementById('raw-edi-content').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => btn.innerHTML = '&#128203; Copy', 2000);
+            });
+        }
+        function copyJson() {
+            const text = document.getElementById('json-content').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                btn.textContent = '✓ Copied!';
+                setTimeout(() => btn.innerHTML = '&#128203; Copy', 2000);
+            });
+        }
+    </script>
+</body>
+</html>

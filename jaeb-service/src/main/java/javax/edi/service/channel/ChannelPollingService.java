@@ -47,6 +47,7 @@ public class ChannelPollingService {
     @Autowired private TransactionLoggingService loggingService;
     @Autowired private SftpChannelAdapter sftpAdapter;
     @Autowired private FtpChannelAdapter ftpAdapter;
+    @Autowired private Oftp2ChannelAdapter oftp2Adapter;
 
     /**
      * Scheduled poll of all active inbound SFTP/FTP channels.
@@ -58,7 +59,7 @@ public class ChannelPollingService {
 
         List<CommunicationChannel> channels = channelRepo.findByStatusAndDirectionAndProtocolIn(
                 ChannelStatus.ACTIVE, Direction.INBOUND,
-                Arrays.asList(Protocol.SFTP, Protocol.FTP));
+                Arrays.asList(Protocol.SFTP, Protocol.FTP, Protocol.OFTP2));
 
         if (channels.isEmpty()) {
             LOG.debug("Channel poll: no active inbound SFTP/FTP channels");
@@ -122,7 +123,7 @@ public class ChannelPollingService {
                     continue;
                 }
 
-                // Parse with resolved delimiters (partner config → ISA header → defaults)
+                // Parse with resolved delimiters (partner config â ISA header â defaults)
                 EDIUnmarshalResult<?> parseResult = EDIUnmarshaller.unmarshalResult(
                         modelClass, new StringReader(ediContent), delimiters.toMessageConfiguration());
 
@@ -167,7 +168,7 @@ public class ChannelPollingService {
         channel.setLastSuccessAt(LocalDateTime.now());
         channel.setUpdatedAt(LocalDateTime.now());
         channelRepo.save(channel);
-        LOG.info("Channel poll complete: {} Ã¢ÂÂ {} file(s) processed", channel.getChannelName(), processed);
+        LOG.info("Channel poll complete: {} ÃÂ¢ÃÂÃÂ {} file(s) processed", channel.getChannelName(), processed);
     }
 
     /**
@@ -196,8 +197,9 @@ public class ChannelPollingService {
 
     private ChannelAdapter resolveAdapter(CommunicationChannel channel) {
         switch (channel.getProtocol()) {
-            case SFTP: return sftpAdapter;
-            case FTP:  return ftpAdapter;
+            case SFTP:  return sftpAdapter;
+            case FTP:   return ftpAdapter;
+            case OFTP2: return oftp2Adapter;
             default:
                 throw new UnsupportedOperationException(
                         "Polling not supported for protocol: " + channel.getProtocol());

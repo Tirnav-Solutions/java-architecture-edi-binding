@@ -6,6 +6,10 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.PostConstruct;
+//import javax.edi.model.edifact.delfor.d04a.DelforD04A;
+//import javax.edi.model.edifact.delfor.d96a.DelforD96A;
+//import javax.edi.model.vda.vda4905.VDA4905Message;
+//import javax.edi.model.vda.vda4984.VDA4984Message;
 import javax.edi.model.x12.edi810.Invoice;
 import javax.edi.model.x12.edi832.PriceSalesCatalog;
 import javax.edi.model.x12.edi846.InventoryInquery;
@@ -45,7 +49,13 @@ public class EDIModelRegistry {
         register("832", "PriceSalesCatalog", PriceSalesCatalog.class);
         register("846", "InventoryInquery", InventoryInquery.class);
 
-        // Register more transaction sets here as they become available
+        // EDIFACT message types
+//        register("DELFOR-D96A", "DelforD96A", DelforD96A.class);
+//        register("DELFOR-D04A", "DelforD04A", DelforD04A.class);
+//
+//        // VDA fixed-width formats (German automotive)
+//        register("VDA4905", "VDA4905Message", VDA4905Message.class);
+//        register("VDA4984", "VDA4984Message", VDA4984Message.class);
 
         LOG.info("EDI Model Registry initialized with {} transaction types: {}",
                 models.size(), models.keySet());

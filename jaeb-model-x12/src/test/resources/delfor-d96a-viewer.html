@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DELFOR D96A � EDI Message Viewer</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ?? Header ????????????????????????????????????????????? */
+  .header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .header .logo {
+    width: 48px; height: 48px;
+    background: var(--accent);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 20px; color: var(--bg);
+  }
+  .header h1 { font-size: 22px; font-weight: 700; }
+  .header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  /* ?? Tabs ??????????????????????????????????????????????? */
+  .tab-bar {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+  }
+  .tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 3px solid transparent;
+    transition: all .2s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ?? Panels ????????????????????????????????????????????? */
+  .panel { display: none; padding: 24px 32px; }
+  .panel.active { display: block; }
+
+  /* ?? Envelope cards ????????????????????????????????????? */
+  .envelope-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 12px 16px;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .card-head .tag {
+    background: var(--accent);
+    color: var(--bg);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .card-head .arrow {
+    margin-left: auto;
+    transition: transform .2s;
+    font-size: 12px;
+  }
+  .card-head.collapsed .arrow { transform: rotate(-90deg); }
+  .card-body { padding: 0 16px 16px; }
+  .card-body.hidden { display: none; }
+
+  /* ?? Key-value rows ????????????????????????????????????? */
+  .kv { display: flex; padding: 6px 0; border-bottom: 1px solid var(--surface2); font-size: 13px; }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { width: 200px; flex-shrink: 0; color: var(--muted); font-weight: 500; }
+  .kv .v { color: var(--text); word-break: break-all; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12.5px; }
+
+  /* ?? Schedule table ????????????????????????????????????? */
+  table.schedule {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  table.schedule th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    position: sticky;
+    top: 0;
+  }
+  table.schedule td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--surface2);
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+  }
+  table.schedule tr:hover td { background: rgba(56,189,248,.06); }
+
+  /* ?? Badge ?????????????????????????????????????????????? */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .badge.firm   { background: rgba(74,222,128,.15); color: var(--green); }
+  .badge.plan   { background: rgba(251,191,36,.15); color: var(--yellow); }
+  .badge.fcast  { background: rgba(129,140,248,.15); color: var(--accent2); }
+  .badge.daily  { background: rgba(34,211,238,.12); color: var(--cyan); }
+  .badge.weekly { background: rgba(244,114,182,.12); color: var(--pink); }
+  .badge.monthly{ background: rgba(251,146,60,.12); color: var(--orange); }
+
+  /* ?? Raw EDI ???????????????????????????????????????????? */
+  .raw-edi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    overflow-x: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .raw-edi .line {
+    display: flex;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12.5px;
+    line-height: 1.8;
+  }
+  .raw-edi .ln {
+    width: 36px;
+    flex-shrink: 0;
+    text-align: right;
+    color: var(--surface2);
+    margin-right: 16px;
+    user-select: none;
+  }
+  .raw-edi .seg-tag { font-weight: 700; }
+  .seg-UNB .seg-tag, .seg-UNZ .seg-tag { color: var(--accent); }
+  .seg-UNH .seg-tag, .seg-UNT .seg-tag { color: var(--accent2); }
+  .seg-BGM .seg-tag { color: var(--green); }
+  .seg-DTM .seg-tag { color: var(--yellow); }
+  .seg-NAD .seg-tag { color: var(--orange); }
+  .seg-RFF .seg-tag { color: var(--pink); }
+  .seg-LIN .seg-tag { color: var(--cyan); }
+  .seg-QTY .seg-tag { color: #a78bfa; }
+  .seg-SCC .seg-tag { color: var(--green); }
+  .seg-IMD .seg-tag { color: var(--muted); }
+  .seg-LOC .seg-tag { color: var(--muted); }
+  .seg-CTA .seg-tag { color: var(--muted); }
+  .seg-UNS .seg-tag { color: var(--red); }
+  .seg-PAC .seg-tag { color: var(--orange); }
+
+  /* ?? JSON panel ????????????????????????????????????????? */
+  .json-pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    overflow: auto;
+    max-height: 80vh;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre;
+  }
+  .json-key   { color: var(--accent); }
+  .json-str   { color: var(--green); }
+  .json-num   { color: var(--orange); }
+  .json-null  { color: var(--muted); }
+  .json-brace { color: var(--text); }
+
+  /* ?? Stats bar ?????????????????????????????????????????? */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    padding: 12px 0;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    min-width: 140px;
+  }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .stat .value { font-size: 22px; font-weight: 800; margin-top: 2px; }
+  .stat .value.blue { color: var(--accent); }
+  .stat .value.green { color: var(--green); }
+  .stat .value.orange { color: var(--orange); }
+  .stat .value.purple { color: var(--accent2); }
+
+  /* ?? Timeline ??????????????????????????????????????????? */
+  .timeline-container {
+    overflow-x: auto;
+    padding: 12px 0;
+  }
+  .timeline-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 180px;
+    padding: 0 8px;
+    min-width: 600px;
+  }
+  .timeline-bar {
+    flex: 1;
+    min-width: 32px;
+    background: var(--accent);
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    transition: background .2s;
+    cursor: default;
+  }
+  .timeline-bar:hover { background: var(--accent2); }
+  .timeline-bar .bar-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .timeline-bar .bar-val {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .timeline-bar.firm { background: var(--green); }
+  .timeline-bar.firm:hover { background: #86efac; }
+  .timeline-bar.plan { background: var(--yellow); }
+  .timeline-bar.plan:hover { background: #fcd34d; }
+  .timeline-bar.fcast { background: var(--accent2); }
+  .timeline-bar.fcast:hover { background: #a5b4fc; }
+
+  .timeline-legend {
+    display: flex;
+    gap: 20px;
+    margin-top: 28px;
+    font-size: 12px;
+  }
+  .timeline-legend .swatch {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">EDI</div>
+  <div>
+    <h1>DELFOR D96A � Delivery Forecast Viewer</h1>
+    <div class="sub">EDIFACT DELFOR D:96A:UN &bull; jaeb (Java Architecture EDI Binding)</div>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" data-tab="overview">Overview</div>
+  <div class="tab" data-tab="schedule">Schedule Timeline</div>
+  <div class="tab" data-tab="raw">Raw EDI</div>
+  <div class="tab" data-tab="json">Parsed JSON</div>
+</div>
+
+<!-- ???????????????????????????????????????????????????????? -->
+<!-- OVERVIEW TAB                                             -->
+<!-- ???????????????????????????????????????????????????????? -->
+<div id="tab-overview" class="panel active">
+  <div class="stats-bar" id="stats-bar"></div>
+  <div class="envelope-grid" id="overview-cards"></div>
+</div>
+
+<!-- ???????????????????????????????????????????????????????? -->
+<!-- SCHEDULE TIMELINE TAB                                    -->
+<!-- ???????????????????????????????????????????????????????? -->
+<div id="tab-schedule" class="panel">
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-head"><span class="tag">CHART</span> Delivery Schedule Quantity Timeline</div>
+    <div class="card-body">
+      <div class="timeline-container">
+        <div class="timeline-chart" id="timeline-chart"></div>
+      </div>
+      <div class="timeline-legend" id="timeline-legend"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="tag">TABLE</span> Schedule Details</div>
+    <div class="card-body">
+      <table class="schedule" id="schedule-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Type</th>
+            <th>Frequency</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Qty</th>
+            <th>UoM</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ???????????????????????????????????????????????????????? -->
+<!-- RAW EDI TAB                                              -->
+<!-- ???????????????????????????????????????????????????????? -->
+<div id="tab-raw" class="panel">
+  <div class="raw-edi" id="raw-edi"></div>
+</div>
+
+<!-- ???????????????????????????????????????????????????????? -->
+<!-- JSON TAB                                                 -->
+<!-- ???????????????????????????????????????????????????????? -->
+<div id="tab-json" class="panel">
+  <div class="json-pre" id="json-pre"></div>
+</div>
+
+<script>
+// ????????????????????????????????????????????????????????????
+// EDI Data � embedded DELFORD96A.edi
+// ????????????????????????????????????????????????????????????
+const RAW_EDI = `UNB+UNOA:3+O093100000875450157AUGES+PARTNERADDRESS+130916:0324+0009927'
+UNH+1+DELFOR:D:96A:UN:A09041'
+BGM+241:::DELIVERY FORECAST+7+5'
+DTM+137:201309160000:203'
+RFF+ADE:0000123789'
+NAD+SE+629914::92+STREET:::TOWN+SUPPLIERNAME+++++HU'
+NAD+BY+1494::92+Biberbachstrasse 9:::86154 Augsburg+FECT Europe+++++DE'
+CTA+IC+:CONTACTNAME'
+UNS+D'
+NAD+CN+1494::92+Biberbachstrasse 9:::86154 Augsburg+FECT, Germany Gmbh,+++++DE'
+LIN+1+3+2437783012:IN'
+IMD+XXX++:::MATERIALDESCRIPTION'
+LOC+11+1494-R400'
+DTM+257:201309160000:203'
+RFF+ON:5500270069'
+RFF+AAN:7'
+DTM+171:20130916:102'
+RFF+AIF:6'
+DTM+171:20130911:102'
+QTY+70:375:PCE'
+QTY+78:375:PCE'
+QTY+12:375'
+RFF+AAK:CC000901'
+DTM+171:20130911:102'
+QTY+73:0:PCE'
+QTY+113:375:PCE'
+SCC+1++D'
+DTM+64:20130919:102'
+DTM+63:20130919:102'
+QTY+113:375:PCE'
+SCC+1++D'
+DTM+64:20131001:102'
+DTM+63:20131001:102'
+QTY+113:375:PCE'
+SCC+1++D'
+DTM+64:20131010:102'
+DTM+63:20131010:102'
+QTY+113:250:PCE'
+SCC+4++W'
+DTM+64:20131021:102'
+DTM+63:20131027:102'
+QTY+113:500:PCE'
+SCC+4++M'
+DTM+64:20131202:102'
+DTM+63:20131231:102'
+QTY+113:750:PCE'
+SCC+4++M'
+DTM+64:20140101:102'
+DTM+63:20140131:102'
+QTY+113:1000:PCE'
+SCC+4++M'
+DTM+64:20140201:102'
+DTM+63:20140228:102'
+QTY+113:750:PCE'
+SCC+4++M'
+DTM+64:20140301:102'
+DTM+63:20140331:102'
+QTY+113:1000:PCE'
+SCC+4++M'
+DTM+64:20140401:102'
+DTM+63:20140430:102'
+QTY+113:1000:PCE'
+SCC+4++M'
+DTM+64:20140501:102'
+DTM+63:20140531:102'
+QTY+113:750:PCE'
+SCC+4++M'
+DTM+64:20140601:102'
+DTM+63:20140630:102'
+QTY+113:1250:PCE'
+SCC+4++M'
+DTM+64:20140701:102'
+DTM+63:20140731:102'
+QTY+113:500:PCE'
+SCC+4++M'
+DTM+64:20140801:102'
+DTM+63:20140831:102'
+QTY+3:1125:PCE'
+SCC+2'
+DTM+51:20130916:102'
+DTM+52:20131010:102'
+QTY+3:1375:PCE'
+SCC+3'
+DTM+51:20130916:102'
+DTM+52:20131027:102'
+PAC+++KLT-R-4328::92:KLT 4328'
+QTY+52:2186:PCE'
+UNS+S'
+UNT+87+1'
+UNZ+1+0009927'`;
+
+// ????????????????????????????????????????????????????????????
+// Lightweight EDIFACT Parser (mirrors EDIFACTUnmarshaller)
+// ????????????????????????????????????????????????????????????
+function parseEdi(raw) {
+  const segments = raw.split("'").map(s => s.trim()).filter(Boolean);
+  const parsed = { envelope: {}, header: {}, parties: [], lineItems: [] };
+
+  let currentLin = null;
+  let currentScc = null;
+  let section = 'header';
+
+  for (const seg of segments) {
+    const elements = seg.split('+');
+    const tag = elements[0];
+
+    if (tag === 'UNB') {
+      parsed.envelope.syntaxId = elements[1] || '';
+      parsed.envelope.sender = elements[2] || '';
+      parsed.envelope.receiver = elements[3] || '';
+      parsed.envelope.dateTime = elements[4] || '';
+      parsed.envelope.controlRef = elements[5] || '';
+    } else if (tag === 'UNH') {
+      parsed.header.msgRef = elements[1] || '';
+      const id = (elements[2] || '').split(':');
+      parsed.header.type = id[0] || '';
+      parsed.header.version = id[1] || '';
+      parsed.header.release = id[2] || '';
+      parsed.header.agency = id[3] || '';
+      parsed.header.assocCode = id[4] || '';
+    } else if (tag === 'BGM') {
+      const c002 = (elements[1] || '').split(':');
+      parsed.header.docNameCode = c002[0] || '';
+      parsed.header.docName = c002[3] || '';
+      parsed.header.docNumber = elements[2] || '';
+      parsed.header.msgFunction = elements[3] || '';
+    } else if (tag === 'DTM') {
+      const c507 = (elements[1] || '').split(':');
+      const dtm = { qualifier: c507[0], value: c507[1], format: c507[2] };
+      if (currentScc) {
+        currentScc.dates.push(dtm);
+      } else if (currentLin) {
+        currentLin.dates.push(dtm);
+      } else {
+        if (!parsed.header.dates) parsed.header.dates = [];
+        parsed.header.dates.push(dtm);
+      }
+    } else if (tag === 'RFF') {
+      const c506 = (elements[1] || '').split(':');
+      const rff = { qualifier: c506[0], number: c506[1] };
+      if (currentLin) {
+        currentLin.references.push(rff);
+      } else {
+        if (!parsed.header.references) parsed.header.references = [];
+        parsed.header.references.push(rff);
+      }
+    } else if (tag === 'NAD') {
+      const c082 = (elements[2] || '').split(':');
+      parsed.parties.push({
+        qualifier: elements[1],
+        partyId: c082[0],
+        agency: c082[2],
+        address: elements[3] || '',
+        name: elements[4] || '',
+        country: elements[9] || ''
+      });
+    } else if (tag === 'CTA') {
+      parsed.header.contactFunction = elements[1] || '';
+      parsed.header.contactName = (elements[2] || '').replace(/^:/, '');
+    } else if (tag === 'UNS') {
+      section = elements[1] === 'D' ? 'detail' : 'summary';
+      if (currentScc) { currentScc = null; }
+    } else if (tag === 'LIN') {
+      if (currentScc) { currentScc = null; }
+      currentLin = {
+        lineNo: elements[1],
+        actionCode: elements[2],
+        itemNumber: '', itemNumberType: '',
+        descriptions: [], locations: [], dates: [], references: [],
+        quantities: [], schedules: [], packages: []
+      };
+      if (elements[3]) {
+        const c212 = elements[3].split(':');
+        currentLin.itemNumber = c212[0] || '';
+        currentLin.itemNumberType = c212[1] || '';
+      }
+      parsed.lineItems.push(currentLin);
+    } else if (tag === 'IMD' && currentLin) {
+      const desc = (elements[3] || '').split(':').pop() || elements[1] || '';
+      currentLin.descriptions.push(desc);
+    } else if (tag === 'LOC' && currentLin) {
+      currentLin.locations.push({ qualifier: elements[1], id: elements[2] || '' });
+    } else if (tag === 'QTY') {
+      const c186 = (elements[1] || '').split(':');
+      const qty = { qualifier: c186[0], quantity: c186[1], uom: c186[2] || '' };
+      if (currentScc) {
+        currentScc.quantities.push(qty);
+      } else if (currentLin) {
+        currentLin.quantities.push(qty);
+      }
+    } else if (tag === 'SCC') {
+      if (currentScc && currentLin) { /* previous SCC closed */ }
+      currentScc = {
+        statusCode: elements[1],
+        frequency: (elements[3] || ''),
+        dates: [], quantities: []
+      };
+      if (currentLin) currentLin.schedules.push(currentScc);
+    } else if (tag === 'PAC' && currentLin) {
+      if (currentScc) { currentScc = null; }
+      currentLin.packages.push(elements[3] || '');
+    } else if (tag === 'UNT') {
+      parsed.trailer = { segmentCount: elements[1], msgRef: elements[2] };
+    } else if (tag === 'UNZ') {
+      parsed.envelope.interchangeCount = elements[1];
+      parsed.envelope.controlRefTrailer = elements[2];
+    }
+  }
+  parsed.rawSegments = segments;
+  return parsed;
+}
+
+// ????????????????????????????????????????????????????????????
+// Helpers
+// ????????????????????????????????????????????????????????????
+const QTY_LABELS = {
+  '3': 'Cumulative scheduled', '12': 'Despatch qty', '70': 'Cum. received',
+  '73': 'Cum. difference', '78': 'Cum. ordered', '113': 'Delivery qty', '52': 'Qty per pack'
+};
+const DTM_LABELS = {
+  '137': 'Document date', '171': 'Reference date', '257': 'Effective from',
+  '63': 'Delivery latest', '64': 'Delivery earliest', '51': 'Cumul. from', '52': 'Cumul. to'
+};
+const SCC_STATUS = { '1': 'Firm', '2': 'Commitment', '3': 'Forecast', '4': 'Planning' };
+const SCC_FREQ   = { 'D': 'Daily', 'W': 'Weekly', 'M': 'Monthly', '': '�' };
+const NAD_QUAL   = { 'SE': 'Seller', 'BY': 'Buyer', 'CN': 'Consignee', 'SU': 'Supplier',
+                     'ST': 'Ship-To', 'DP': 'Delivery Party' };
+const RFF_QUAL   = { 'ADE': 'Schedule No.', 'ON': 'Order No.', 'AAN': 'Delivery call-off',
+                     'AIF': 'Forecast ref.', 'AAK': 'Despatch ref.' };
+const MSG_FUNC   = { '5': 'Replace', '9': 'Original' };
+
+function fmtDate(v) {
+  if (!v) return '�';
+  if (v.length === 14) return v.slice(0,4)+'-'+v.slice(4,6)+'-'+v.slice(6,8)+' '+v.slice(8,10)+':'+v.slice(10,12);
+  if (v.length >= 8) return v.slice(0,4)+'-'+v.slice(4,6)+'-'+v.slice(6,8);
+  return v;
+}
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ????????????????????????????????????????????????????????????
+// Render
+// ????????????????????????????????????????????????????????????
+const data = parseEdi(RAW_EDI);
+
+function renderStats() {
+  const totalQty = data.lineItems.flatMap(l => l.schedules)
+    .filter(s => s.quantities.length)
+    .reduce((a, s) => a + parseInt(s.quantities[0].quantity || 0), 0);
+  const el = document.getElementById('stats-bar');
+  el.innerHTML = `
+    <div class="stat"><div class="label">Segments</div><div class="value blue">${data.trailer ? data.trailer.segmentCount : data.rawSegments.length}</div></div>
+    <div class="stat"><div class="label">Line Items</div><div class="value green">${data.lineItems.length}</div></div>
+    <div class="stat"><div class="label">Schedule Lines</div><div class="value orange">${data.lineItems.reduce((a,l) => a + l.schedules.length, 0)}</div></div>
+    <div class="stat"><div class="label">Total Sched. Qty</div><div class="value purple">${totalQty.toLocaleString()} PCE</div></div>
+    <div class="stat"><div class="label">Parties</div><div class="value blue">${data.parties.length}</div></div>
+  `;
+}
+
+function kvRow(k, v) { return `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v || '�')}</span></div>`; }
+
+function makeCard(tag, title, kvs, open) {
+  const id = 'card-' + Math.random().toString(36).slice(2);
+  return `<div class="card">
+    <div class="card-head${open ? '' : ' collapsed'}" onclick="toggleCard('${id}')">
+      <span class="tag">${tag}</span> ${esc(title)}
+      <span class="arrow">?</span>
+    </div>
+    <div class="card-body${open ? '' : ' hidden'}" id="${id}">${kvs}</div>
+  </div>`;
+}
+
+function renderOverview() {
+  const el = document.getElementById('overview-cards');
+  let html = '';
+
+  // Interchange
+  html += makeCard('UNB', 'Interchange Envelope', [
+    kvRow('Syntax Identifier', data.envelope.syntaxId),
+    kvRow('Sender', data.envelope.sender),
+    kvRow('Receiver', data.envelope.receiver),
+    kvRow('Date/Time', data.envelope.dateTime),
+    kvRow('Control Reference', data.envelope.controlRef),
+  ].join(''), true);
+
+  // Message header
+  html += makeCard('UNH/BGM', 'Message Header', [
+    kvRow('Message Type', `${data.header.type} ${data.header.version}:${data.header.release}`),
+    kvRow('Association Code', data.header.assocCode),
+    kvRow('Document Name', data.header.docName),
+    kvRow('Document Name Code', data.header.docNameCode),
+    kvRow('Document Number', data.header.docNumber),
+    kvRow('Message Function', `${data.header.msgFunction} (${MSG_FUNC[data.header.msgFunction] || ''})`),
+    kvRow('Contact', data.header.contactName),
+  ].join(''), true);
+
+  // Header dates
+  if (data.header.dates) {
+    html += makeCard('DTM', 'Message Dates', data.header.dates.map(d =>
+      kvRow(DTM_LABELS[d.qualifier] || `DTM-${d.qualifier}`, fmtDate(d.value))
+    ).join(''), true);
+  }
+
+  // Header references
+  if (data.header.references) {
+    html += makeCard('RFF', 'References', data.header.references.map(r =>
+      kvRow(RFF_LABELS[r.qualifier] || `RFF-${r.qualifier}`, r.number)
+    ).join(''), true);
+  }
+
+  // Parties
+  for (const p of data.parties) {
+    html += makeCard('NAD', `${NAD_QUAL[p.qualifier] || p.qualifier} � ${p.name || p.partyId}`, [
+      kvRow('Qualifier', `${p.qualifier} (${NAD_QUAL[p.qualifier] || ''})`),
+      kvRow('Party ID', p.partyId),
+      kvRow('Name', p.name),
+      kvRow('Address', p.address),
+      kvRow('Country', p.country),
+    ].join(''), true);
+  }
+
+  // Line Items
+  for (const lin of data.lineItems) {
+    let linKvs = [
+      kvRow('Line #', lin.lineNo),
+      kvRow('Item Number', lin.itemNumber),
+      kvRow('Item Type', lin.itemNumberType),
+      kvRow('Description', lin.descriptions.join(', ') || '�'),
+      kvRow('Location', lin.locations.map(l => `${l.id} (${l.qualifier})`).join(', ') || '�'),
+    ];
+
+    // Item dates
+    if (lin.dates.length) {
+      linKvs.push('<div style="margin-top:8px;font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item-Level Dates</div>');
+      for (const d of lin.dates)
+        linKvs.push(kvRow(DTM_LABELS[d.qualifier] || `DTM-${d.qualifier}`, fmtDate(d.value)));
+    }
+
+    // Item references
+    if (lin.references.length) {
+      linKvs.push('<div style="margin-top:8px;font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Item-Level References</div>');
+      for (const r of lin.references)
+        linKvs.push(kvRow(RFF_LABELS[r.qualifier] || `RFF-${r.qualifier}`, r.number));
+    }
+
+    // Item quantities
+    if (lin.quantities.length) {
+      linKvs.push('<div style="margin-top:8px;font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Quantities</div>');
+      for (const q of lin.quantities)
+        linKvs.push(kvRow(QTY_LABELS[q.qualifier] || `QTY-${q.qualifier}`, `${q.quantity} ${q.uom}`));
+    }
+
+    // Packages
+    if (lin.packages.length) {
+      linKvs.push('<div style="margin-top:8px;font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Packaging</div>');
+      for (const p of lin.packages) linKvs.push(kvRow('Package', p));
+    }
+
+    html += makeCard('LIN', `Line ${lin.lineNo} � ${lin.itemNumber}`, linKvs.join(''), true);
+  }
+
+  el.innerHTML = html;
+}
+
+function renderSchedule() {
+  const tbody = document.querySelector('#schedule-table tbody');
+  const chart = document.getElementById('timeline-chart');
+  const legend = document.getElementById('timeline-legend');
+  let rows = '';
+  let bars = '';
+  let maxQty = 0;
+  const schedData = [];
+
+  let idx = 0;
+  for (const lin of data.lineItems) {
+    for (const s of lin.schedules) {
+      idx++;
+      const status = SCC_STATUS[s.statusCode] || s.statusCode;
+      const freq = SCC_FREQ[s.frequency] || s.frequency || '�';
+      const startDtm = s.dates.find(d => d.qualifier === '64' || d.qualifier === '51');
+      const endDtm   = s.dates.find(d => d.qualifier === '63' || d.qualifier === '52');
+      const qty = s.quantities.length ? s.quantities[0] : { quantity: '�', uom: '' };
+      const qtyNum = parseInt(qty.quantity) || 0;
+      if (qtyNum > maxQty) maxQty = qtyNum;
+
+      const typeBadge = s.statusCode === '1' ? 'firm' : s.statusCode === '2' ? 'fcast' : s.statusCode === '3' ? 'fcast' : 'plan';
+      const freqBadge = s.frequency === 'D' ? 'daily' : s.frequency === 'W' ? 'weekly' : s.frequency === 'M' ? 'monthly' : '';
+
+      rows += `<tr>
+        <td>${idx}</td>
+        <td><span class="badge ${typeBadge}">${status}</span></td>
+        <td><span class="badge ${freqBadge}">${freq}</span></td>
+        <td>${fmtDate(startDtm ? startDtm.value : '')}</td>
+        <td>${fmtDate(endDtm ? endDtm.value : '')}</td>
+        <td style="font-weight:700">${parseInt(qty.quantity).toLocaleString()}</td>
+        <td>${qty.uom}</td>
+      </tr>`;
+
+      schedData.push({ idx, status, freq, start: startDtm ? startDtm.value : '', qty: qtyNum, typeBadge });
+    }
+  }
+  tbody.innerHTML = rows;
+
+  // Bar chart
+  if (maxQty > 0) {
+    for (const d of schedData) {
+      const h = Math.max(4, (d.qty / maxQty) * 150);
+      const label = d.start ? d.start.slice(4,6) + '/' + d.start.slice(0,4) : '#' + d.idx;
+      bars += `<div class="timeline-bar ${d.typeBadge}" style="height:${h}px" title="${d.status} � ${d.qty} PCE">
+        <span class="bar-val">${d.qty}</span>
+        <span class="bar-label">${label}</span>
+      </div>`;
+    }
+    chart.innerHTML = bars;
+  }
+
+  legend.innerHTML = `
+    <div><span class="swatch" style="background:var(--green)"></span> Firm</div>
+    <div><span class="swatch" style="background:var(--yellow)"></span> Commitment</div>
+    <div><span class="swatch" style="background:var(--accent2)"></span> Forecast / Planning</div>
+  `;
+}
+
+function renderRaw() {
+  const el = document.getElementById('raw-edi');
+  const lines = RAW_EDI.split('\n');
+  el.innerHTML = lines.map((line, i) => {
+    const tag = line.split('+')[0].trim();
+    return `<div class="line seg-${tag}">
+      <span class="ln">${i + 1}</span>
+      <span><span class="seg-tag">${esc(tag)}</span>${esc(line.slice(tag.length))}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderJson() {
+  const el = document.getElementById('json-pre');
+  const json = JSON.stringify(data, null, 2);
+  // Syntax-highlight JSON
+  const highlighted = json.replace(
+    /("(?:\\.|[^"\\])*")\s*:/g,
+    '<span class="json-key">$1</span>:'
+  ).replace(
+    /:\s*("(?:\\.|[^"\\])*")/g,
+    ': <span class="json-str">$1</span>'
+  ).replace(
+    /:\s*(\d+)/g,
+    ': <span class="json-num">$1</span>'
+  ).replace(
+    /\bnull\b/g,
+    '<span class="json-null">null</span>'
+  );
+  el.innerHTML = highlighted;
+}
+
+// ????????????????????????????????????????????????????????????
+// Tab switching & card toggle
+// ????????????????????????????????????????????????????????????
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+}));
+
+function toggleCard(id) {
+  const body = document.getElementById(id);
+  const head = body.previousElementSibling;
+  body.classList.toggle('hidden');
+  head.classList.toggle('collapsed');
+}
+
+// ????????????????????????????????????????????????????????????
+// Init
+// ????????????????????????????????????????????????????????????
+renderStats();
+renderOverview();
+renderSchedule();
+renderRaw();
+renderJson();
+</script>
+</body>
+</html>

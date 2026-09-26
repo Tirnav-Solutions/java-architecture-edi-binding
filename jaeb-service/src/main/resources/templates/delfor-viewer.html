@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DELFOR D96A Viewer — JAEB EDI Platform</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── Tab navigation ──────────────────────── */
+        .viewer-tabs {
+            display: flex;
+            background: #fff;
+            border-bottom: 1px solid var(--gray-200);
+            margin-bottom: 24px;
+            border-radius: var(--radius) var(--radius) 0 0;
+            overflow: hidden;
+        }
+        .viewer-tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            font-size: .82rem;
+            font-weight: 600;
+            color: var(--gray-500);
+            border-bottom: 3px solid transparent;
+            transition: all .2s;
+            user-select: none;
+        }
+        .viewer-tab:hover { color: var(--gray-800); background: var(--gray-50); }
+        .viewer-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .viewer-panel { display: none; }
+        .viewer-panel.active { display: block; }
+
+        /* ── Section headers inside cards ────────── */
+        .section-title {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--gray-400);
+            margin: 16px 0 8px;
+            padding-top: 12px;
+            border-top: 1px solid var(--gray-100);
+        }
+        .section-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+
+        /* ── Key-value detail rows ───────────────── */
+        .kv-row {
+            display: flex;
+            padding: 5px 0;
+            font-size: .82rem;
+            border-bottom: 1px solid var(--gray-50);
+        }
+        .kv-row:last-child { border-bottom: none; }
+        .kv-row .kv-label {
+            width: 180px;
+            flex-shrink: 0;
+            color: var(--gray-500);
+            font-weight: 500;
+            font-size: .78rem;
+        }
+        .kv-row .kv-value {
+            color: var(--gray-800);
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: .78rem;
+            word-break: break-all;
+        }
+
+        /* ── Segment tag badges ──────────────────── */
+        .seg-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: .65rem;
+            font-weight: 800;
+            font-family: 'Cascadia Code', monospace;
+            letter-spacing: .03em;
+            margin-right: 4px;
+        }
+        .seg-badge.seg-UNB { background: #dbeafe; color: #1e40af; }
+        .seg-badge.seg-UNH { background: #e8d5ff; color: #6d28d9; }
+        .seg-badge.seg-BGM { background: #d1fae5; color: #065f46; }
+        .seg-badge.seg-DTM { background: #fef3c7; color: #92400e; }
+        .seg-badge.seg-NAD { background: #ffedd5; color: #9a3412; }
+        .seg-badge.seg-RFF { background: #fce7f3; color: #9d174d; }
+        .seg-badge.seg-LIN { background: #cffafe; color: #155e75; }
+        .seg-badge.seg-QTY { background: #ede9fe; color: #5b21b6; }
+        .seg-badge.seg-SCC { background: #d1fae5; color: #065f46; }
+        .seg-badge.seg-IMD { background: var(--gray-100); color: var(--gray-600); }
+        .seg-badge.seg-LOC { background: var(--gray-100); color: var(--gray-600); }
+        .seg-badge.seg-CTA { background: var(--gray-100); color: var(--gray-600); }
+        .seg-badge.seg-UNS { background: #fee2e2; color: #991b1b; }
+        .seg-badge.seg-PAC { background: #ffedd5; color: #9a3412; }
+        .seg-badge.seg-UNT { background: #e8d5ff; color: #6d28d9; }
+        .seg-badge.seg-UNZ { background: #dbeafe; color: #1e40af; }
+
+        /* ── Raw EDI block ───────────────────────── */
+        .raw-edi-block {
+            background: var(--gray-900);
+            color: #e5e7eb;
+            padding: 20px;
+            border-radius: var(--radius);
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: .78rem;
+            line-height: 1.9;
+            overflow: auto;
+            max-height: 75vh;
+            counter-reset: line;
+        }
+        .raw-line {
+            display: flex;
+            counter-increment: line;
+        }
+        .raw-line:hover { background: rgba(255,255,255,.04); }
+        .raw-ln {
+            width: 36px;
+            flex-shrink: 0;
+            text-align: right;
+            color: var(--gray-600);
+            margin-right: 16px;
+            user-select: none;
+            font-size: .72rem;
+        }
+
+        /* ── JSON block ──────────────────────────── */
+        .json-block {
+            background: var(--gray-900);
+            color: #e5e7eb;
+            padding: 20px;
+            border-radius: var(--radius);
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: .74rem;
+            line-height: 1.6;
+            overflow: auto;
+            max-height: 75vh;
+            white-space: pre;
+        }
+
+        /* ── Schedule bar chart ──────────────────── */
+        .chart-container { overflow-x: auto; padding: 8px 0; }
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 5px;
+            height: 200px;
+            padding: 0 8px;
+            min-width: 600px;
+        }
+        .bar {
+            flex: 1;
+            min-width: 30px;
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            transition: opacity .2s;
+            cursor: default;
+        }
+        .bar:hover { opacity: .85; }
+        .bar-val {
+            position: absolute; top: -18px; left: 50%;
+            transform: translateX(-50%);
+            font-size: .65rem; font-weight: 700; color: var(--gray-700);
+            white-space: nowrap;
+        }
+        .bar-label {
+            position: absolute; bottom: -22px; left: 50%;
+            transform: translateX(-50%);
+            font-size: .6rem; color: var(--gray-400);
+            white-space: nowrap;
+        }
+        .bar.bar-firm { background: var(--success); }
+        .bar.bar-plan { background: var(--warning); }
+        .bar.bar-commit { background: var(--primary); }
+        .bar.bar-forecast { background: #8b5cf6; }
+        .chart-legend {
+            display: flex; gap: 20px; margin-top: 30px; font-size: .75rem;
+        }
+        .chart-legend .swatch {
+            width: 12px; height: 12px; border-radius: 3px;
+            display: inline-block; vertical-align: middle; margin-right: 6px;
+        }
+
+        /* ── Collapsible card toggle ─────────────── */
+        .card-toggle { cursor: pointer; user-select: none; }
+        .card-toggle .toggle-icon {
+            transition: transform .2s;
+            display: inline-block;
+            margin-left: auto;
+            font-size: .7rem;
+        }
+        .card-toggle.collapsed .toggle-icon { transform: rotate(-90deg); }
+        .card-collapse { overflow: hidden; }
+        .card-collapse.hidden { display: none; }
+
+        /* ── Party cards grid ────────────────────── */
+        .party-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+    </style>
+</head>
+<body>
+<nav th:replace="fragments/layout :: sidebar"></nav>
+<div class="main">
+    <div class="topbar">
+        <h1>&#9638; DELFOR D96A — Delivery Forecast Viewer</h1>
+        <div class="topbar-right">
+            <span class="badge badge-primary">DEMO</span>
+            <span class="text-sm text-muted">DELFORD96A.edi</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- Parse error alert -->
+        <div th:if="${parseError}" class="alert alert-danger">
+            &#9888; Parse failed: <span th:text="${parseError}"></span>
+        </div>
+
+        <!-- Stats bar -->
+        <div class="stats-grid" th:if="${parsed}">
+            <div class="stat-card primary">
+                <div class="stat-label">Segments</div>
+                <div class="stat-value" th:text="${segmentCount}">0</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-label">Line Items</div>
+                <div class="stat-value" th:text="${delfor.lineItemGroups != null ? delfor.lineItemGroups.size() : 0}">0</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-label">Schedule Lines</div>
+                <div class="stat-value" id="stat-schedules">0</div>
+            </div>
+            <div class="stat-card primary">
+                <div class="stat-label">Parties</div>
+                <div class="stat-value" th:text="${delfor.nameAndAddresses != null ? delfor.nameAndAddresses.size() : 0}">0</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-label">Parse Time</div>
+                <div class="stat-value"><span th:text="${parseTimeMs}">0</span><span style="font-size:.8rem;font-weight:400"> ms</span></div>
+            </div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="viewer-tabs">
+            <div class="viewer-tab active" data-panel="overview">Overview</div>
+            <div class="viewer-tab" data-panel="schedule">Schedule Timeline</div>
+            <div class="viewer-tab" data-panel="raw">Raw EDI</div>
+            <div class="viewer-tab" data-panel="json">Parsed JSON</div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!--  OVERVIEW TAB                                          -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div id="panel-overview" class="viewer-panel active" th:if="${delfor != null}">
+
+            <!-- Interchange Envelope -->
+            <div class="card mb-4" th:if="${delfor.interchangeHeader != null}">
+                <div class="card-header card-toggle" onclick="toggleCard(this)">
+                    <h3><span class="seg-badge seg-UNB">UNB</span> Interchange Envelope</h3>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+                <div class="card-body card-collapse" th:with="h=${delfor.interchangeHeader}">
+                    <div class="kv-row"><span class="kv-label">Syntax Identifier</span><span class="kv-value" th:text="${h.syntaxIdentifier}"></span></div>
+                    <div class="kv-row"><span class="kv-label">Sender</span><span class="kv-value" th:text="${h.interchangeSender}"></span></div>
+                    <div class="kv-row"><span class="kv-label">Receiver</span><span class="kv-value" th:text="${h.interchangeRecipient}"></span></div>
+                    <div class="kv-row"><span class="kv-label">Date/Time</span><span class="kv-value" th:text="${h.dateTimeOfPreparation}"></span></div>
+                    <div class="kv-row"><span class="kv-label">Control Reference</span><span class="kv-value" th:text="${h.interchangeControlReference}"></span></div>
+                </div>
+            </div>
+
+            <!-- Message Header -->
+            <div class="card mb-4" th:if="${delfor.beginningOfMessage != null}">
+                <div class="card-header card-toggle" onclick="toggleCard(this)">
+                    <h3><span class="seg-badge seg-BGM">BGM</span> Message Header</h3>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+                <div class="card-body card-collapse">
+                    <div th:if="${delfor.messageHeader != null}">
+                        <div class="kv-row"><span class="kv-label">Message Reference</span><span class="kv-value" th:text="${delfor.messageHeader.messageReferenceNumber}"></span></div>
+                        <div class="kv-row"><span class="kv-label">Message Identifier</span><span class="kv-value" th:text="${delfor.messageHeader.messageIdentifier}"></span></div>
+                    </div>
+                    <div th:with="bgm=${delfor.beginningOfMessage}">
+                        <div class="kv-row"><span class="kv-label">Document Name Code</span><span class="kv-value" th:text="${bgm.documentNameCode}"></span></div>
+                        <div class="kv-row" th:if="${bgm.documentName != null}"><span class="kv-label">Document Name</span><span class="kv-value" th:text="${bgm.documentName}"></span></div>
+                        <div class="kv-row"><span class="kv-label">Document Number</span><span class="kv-value" th:text="${bgm.documentNumber}"></span></div>
+                        <div class="kv-row"><span class="kv-label">Message Function</span>
+                            <span class="kv-value">
+                                <span th:text="${bgm.messageFunctionCode}"></span>
+                                <span th:if="${bgm.messageFunctionCode == '5'}" class="text-muted"> (Replace)</span>
+                                <span th:if="${bgm.messageFunctionCode == '9'}" class="text-muted"> (Original)</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message-level Dates -->
+            <div class="card mb-4" th:if="${delfor.dateTimePeriods != null && !delfor.dateTimePeriods.isEmpty()}">
+                <div class="card-header card-toggle" onclick="toggleCard(this)">
+                    <h3><span class="seg-badge seg-DTM">DTM</span> Message Dates</h3>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+                <div class="card-body card-collapse">
+                    <div th:each="dtm : ${delfor.dateTimePeriods}" class="kv-row">
+                        <span class="kv-label">
+                            <th:block th:switch="${dtm.dateTimePeriodQualifier}">
+                                <th:block th:case="'137'">Document date</th:block>
+                                <th:block th:case="'171'">Reference date</th:block>
+                                <th:block th:case="'257'">Effective from</th:block>
+                                <th:block th:case="*" th:text="'DTM-' + ${dtm.dateTimePeriodQualifier}"></th:block>
+                            </th:block>
+                        </span>
+                        <span class="kv-value" th:text="${dtm.dateTimePeriodValue} + ' (' + ${dtm.dateTimePeriodFormatQualifier} + ')'"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- References -->
+            <div class="card mb-4" th:if="${delfor.references != null && !delfor.references.isEmpty()}">
+                <div class="card-header card-toggle" onclick="toggleCard(this)">
+                    <h3><span class="seg-badge seg-RFF">RFF</span> References</h3>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+                <div class="card-body card-collapse">
+                    <div th:each="rff : ${delfor.references}" class="kv-row">
+                        <span class="kv-label">
+                            <th:block th:switch="${rff.referenceQualifier}">
+                                <th:block th:case="'ADE'">Schedule No.</th:block>
+                                <th:block th:case="'ON'">Order No.</th:block>
+                                <th:block th:case="'AAN'">Delivery call-off</th:block>
+                                <th:block th:case="'AIF'">Forecast ref.</th:block>
+                                <th:block th:case="'AAK'">Despatch ref.</th:block>
+                                <th:block th:case="*" th:text="'RFF-' + ${rff.referenceQualifier}"></th:block>
+                            </th:block>
+                        </span>
+                        <span class="kv-value" th:text="${rff.referenceNumber}"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parties -->
+            <div class="card mb-4" th:if="${delfor.nameAndAddresses != null && !delfor.nameAndAddresses.isEmpty()}">
+                <div class="card-header card-toggle" onclick="toggleCard(this)">
+                    <h3><span class="seg-badge seg-NAD">NAD</span> Trading Parties</h3>
+                    <span class="toggle-icon">&#9660;</span>
+                </div>
+                <div class="card-body card-collapse">
+                    <div class="party-grid">
+                        <div th:each="nad : ${delfor.nameAndAddresses}" class="card" style="box-shadow:none">
+                            <div class="card-header" style="padding:12px 16px">
+                                <h3 style="font-size:.82rem">
+                                    <span class="badge badge-primary" th:text="${nad.partyQualifier}"></span>
+                                    <th:block th:switch="${nad.partyQualifier}">
+                                        <th:block th:case="'SE'"> Seller</th:block>
+                                        <th:block th:case="'BY'"> Buyer</th:block>
+                                        <th:block th:case="'CN'"> Consignee</th:block>
+                                        <th:block th:case="'SU'"> Supplier</th:block>
+                                        <th:block th:case="'ST'"> Ship-To</th:block>
+                                        <th:block th:case="*" th:text="' ' + ${nad.partyQualifier}"></th:block>
+                                    </th:block>
+                                </h3>
+                            </div>
+                            <div class="card-body" style="padding:12px 16px">
+                                <div class="kv-row"><span class="kv-label" style="width:100px">ID</span><span class="kv-value" th:text="${nad.partyIdIdentification}"></span></div>
+                                <div class="kv-row" th:if="${nad.partyName != null}"><span class="kv-label" style="width:100px">Name</span><span class="kv-value" th:text="${nad.partyName}"></span></div>
+                                <div class="kv-row" th:if="${nad.nameAndAddress != null}"><span class="kv-label" style="width:100px">Address</span><span class="kv-value" th:text="${nad.nameAndAddress}"></span></div>
+                                <div class="kv-row" th:if="${nad.codeListResponsibleAgency != null}"><span class="kv-label" style="width:100px">Agency</span><span class="kv-value" th:text="${nad.codeListResponsibleAgency}"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Line Item Groups -->
+            <div th:if="${delfor.lineItemGroups != null}" th:each="lig, ligStat : ${delfor.lineItemGroups}">
+                <div class="card mb-4">
+                    <div class="card-header card-toggle" onclick="toggleCard(this)">
+                        <h3>
+                            <span class="seg-badge seg-LIN">LIN</span>
+                            Line <span th:text="${lig.lineItem != null ? lig.lineItem.lineItemNumber : ligStat.index + 1}"></span>
+                            — <span th:if="${lig.lineItem != null}" th:text="${lig.lineItem.itemNumber}" style="font-family:monospace"></span>
+                        </h3>
+                        <span class="toggle-icon">&#9660;</span>
+                    </div>
+                    <div class="card-body card-collapse">
+                        <!-- Item basics -->
+                        <div th:if="${lig.lineItem != null}" th:with="lin=${lig.lineItem}">
+                            <div class="kv-row"><span class="kv-label">Item Number</span><span class="kv-value" th:text="${lin.itemNumber}"></span></div>
+                            <div class="kv-row"><span class="kv-label">Item Type</span><span class="kv-value" th:text="${lin.itemNumberType}"></span></div>
+                            <div class="kv-row" th:if="${lin.actionRequestCode != null}"><span class="kv-label">Action Code</span><span class="kv-value" th:text="${lin.actionRequestCode}"></span></div>
+                        </div>
+
+                        <!-- Descriptions -->
+                        <div th:if="${lig.itemDescriptions != null && !lig.itemDescriptions.isEmpty()}">
+                            <div class="section-title">Item Description (IMD)</div>
+                            <div th:each="imd : ${lig.itemDescriptions}" class="kv-row">
+                                <span class="kv-label" th:text="${imd.descriptionFormatCode}"></span>
+                                <span class="kv-value" th:text="${imd.itemDescription}"></span>
+                            </div>
+                        </div>
+
+                        <!-- Locations -->
+                        <div th:if="${lig.locations != null && !lig.locations.isEmpty()}">
+                            <div class="section-title">Location (LOC)</div>
+                            <div th:each="loc : ${lig.locations}" class="kv-row">
+                                <span class="kv-label">
+                                    <th:block th:if="${loc.locationQualifier == '11'}">Delivery point</th:block>
+                                    <th:block th:if="${loc.locationQualifier != '11'}" th:text="'LOC-' + ${loc.locationQualifier}"></th:block>
+                                </span>
+                                <span class="kv-value" th:text="${loc.locationId}"></span>
+                            </div>
+                        </div>
+
+                        <!-- Item Dates -->
+                        <div th:if="${lig.dateTimePeriods != null && !lig.dateTimePeriods.isEmpty()}">
+                            <div class="section-title">Dates (DTM)</div>
+                            <div th:each="dtm : ${lig.dateTimePeriods}" class="kv-row">
+                                <span class="kv-label">
+                                    <th:block th:switch="${dtm.dateTimePeriodQualifier}">
+                                        <th:block th:case="'257'">Effective from</th:block>
+                                        <th:block th:case="'171'">Reference date</th:block>
+                                        <th:block th:case="'64'">Delivery earliest</th:block>
+                                        <th:block th:case="'63'">Delivery latest</th:block>
+                                        <th:block th:case="*" th:text="'DTM-' + ${dtm.dateTimePeriodQualifier}"></th:block>
+                                    </th:block>
+                                </span>
+                                <span class="kv-value" th:text="${dtm.dateTimePeriodValue}"></span>
+                            </div>
+                        </div>
+
+                        <!-- Item References -->
+                        <div th:if="${lig.references != null && !lig.references.isEmpty()}">
+                            <div class="section-title">References (RFF)</div>
+                            <div th:each="rff : ${lig.references}" class="kv-row">
+                                <span class="kv-label">
+                                    <th:block th:switch="${rff.referenceQualifier}">
+                                        <th:block th:case="'ON'">Order No.</th:block>
+                                        <th:block th:case="'AAN'">Delivery call-off</th:block>
+                                        <th:block th:case="'AIF'">Forecast ref.</th:block>
+                                        <th:block th:case="'AAK'">Despatch ref.</th:block>
+                                        <th:block th:case="*" th:text="'RFF-' + ${rff.referenceQualifier}"></th:block>
+                                    </th:block>
+                                </span>
+                                <span class="kv-value" th:text="${rff.referenceNumber}"></span>
+                            </div>
+                        </div>
+
+                        <!-- Item Quantities -->
+                        <div th:if="${lig.quantities != null && !lig.quantities.isEmpty()}">
+                            <div class="section-title">Quantities (QTY)</div>
+                            <table style="width:100%;font-size:.82rem;border-collapse:collapse">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align:left;padding:6px 10px;background:var(--gray-50);font-size:.7rem;text-transform:uppercase;color:var(--gray-500)">Qualifier</th>
+                                        <th style="text-align:left;padding:6px 10px;background:var(--gray-50);font-size:.7rem;text-transform:uppercase;color:var(--gray-500)">Description</th>
+                                        <th style="text-align:right;padding:6px 10px;background:var(--gray-50);font-size:.7rem;text-transform:uppercase;color:var(--gray-500)">Quantity</th>
+                                        <th style="text-align:left;padding:6px 10px;background:var(--gray-50);font-size:.7rem;text-transform:uppercase;color:var(--gray-500)">UoM</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="q : ${lig.quantities}" style="border-bottom:1px solid var(--gray-100)">
+                                        <td style="padding:6px 10px;font-family:monospace;font-size:.78rem" th:text="${q.quantityQualifier}"></td>
+                                        <td style="padding:6px 10px;font-size:.78rem">
+                                            <th:block th:switch="${q.quantityQualifier}">
+                                                <th:block th:case="'70'">Cumulative received</th:block>
+                                                <th:block th:case="'78'">Cumulative ordered</th:block>
+                                                <th:block th:case="'12'">Despatch qty</th:block>
+                                                <th:block th:case="'73'">Cumulative difference</th:block>
+                                                <th:block th:case="'113'">Delivery qty</th:block>
+                                                <th:block th:case="'52'">Qty per pack</th:block>
+                                                <th:block th:case="'3'">Cumulative scheduled</th:block>
+                                                <th:block th:case="*" th:text="'QTY-' + ${q.quantityQualifier}"></th:block>
+                                            </th:block>
+                                        </td>
+                                        <td style="padding:6px 10px;text-align:right;font-weight:700;font-family:monospace;font-size:.82rem" th:text="${q.quantity}"></td>
+                                        <td style="padding:6px 10px;font-size:.78rem" th:text="${q.measureUnitQualifier}"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Schedule Details (SCC groups) -->
+                        <div th:if="${lig.scheduleDetails != null && !lig.scheduleDetails.isEmpty()}">
+                            <div class="section-title">Delivery Schedule (SCC)</div>
+                            <div class="table-wrapper" style="max-height:none">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Status</th>
+                                            <th>Frequency</th>
+                                            <th>Start Date</th>
+                                            <th>End Date</th>
+                                            <th>Qty</th>
+                                            <th>UoM</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr th:each="scc, sccStat : ${lig.scheduleDetails}"
+                                            th:with="sc=${scc.schedulingConditions}">
+                                            <td th:text="${sccStat.index + 1}"></td>
+                                            <td>
+                                                <span class="badge"
+                                                      th:classappend="${sc.deliveryPlanStatusCode == '1'} ? 'badge-success' : (${sc.deliveryPlanStatusCode == '4'} ? 'badge-warning' : 'badge-primary')">
+                                                    <th:block th:switch="${sc.deliveryPlanStatusCode}">
+                                                        <th:block th:case="'1'">Firm</th:block>
+                                                        <th:block th:case="'2'">Commitment</th:block>
+                                                        <th:block th:case="'3'">Forecast</th:block>
+                                                        <th:block th:case="'4'">Planning</th:block>
+                                                        <th:block th:case="*" th:text="${sc.deliveryPlanStatusCode}"></th:block>
+                                                    </th:block>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-gray">
+                                                    <th:block th:switch="${sc.patternDescription}">
+                                                        <th:block th:case="'D'">Daily</th:block>
+                                                        <th:block th:case="'W'">Weekly</th:block>
+                                                        <th:block th:case="'M'">Monthly</th:block>
+                                                        <th:block th:case="null">—</th:block>
+                                                        <th:block th:case="*" th:text="${sc.patternDescription}"></th:block>
+                                                    </th:block>
+                                                </span>
+                                            </td>
+                                            <td style="font-family:monospace;font-size:.78rem"
+                                                th:text="${scc.dateTimePeriods != null && !scc.dateTimePeriods.isEmpty() ? scc.dateTimePeriods.get(0).dateTimePeriodValue : '—'}"></td>
+                                            <td style="font-family:monospace;font-size:.78rem"
+                                                th:text="${scc.dateTimePeriods != null && scc.dateTimePeriods.size() > 1 ? scc.dateTimePeriods.get(1).dateTimePeriodValue : '—'}"></td>
+                                            <td style="font-weight:700;font-family:monospace"
+                                                th:text="${scc.quantities != null && !scc.quantities.isEmpty() ? scc.quantities.get(0).quantity : '—'}"></td>
+                                            <td th:text="${scc.quantities != null && !scc.quantities.isEmpty() ? scc.quantities.get(0).measureUnitQualifier : ''}"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Packages -->
+                        <div th:if="${lig.packages != null && !lig.packages.isEmpty()}">
+                            <div class="section-title">Packaging (PAC)</div>
+                            <div th:each="pac : ${lig.packages}" class="kv-row">
+                                <span class="kv-label">Package Type</span>
+                                <span class="kv-value" th:text="${pac.packageType}"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!--  SCHEDULE TIMELINE TAB                                 -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div id="panel-schedule" class="viewer-panel" th:if="${delfor != null}">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3>&#9632; Delivery Schedule — Quantity Timeline</h3>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <div class="bar-chart" id="bar-chart"></div>
+                    </div>
+                    <div class="chart-legend">
+                        <div><span class="swatch" style="background:var(--success)"></span> Firm</div>
+                        <div><span class="swatch" style="background:var(--primary)"></span> Commitment</div>
+                        <div><span class="swatch" style="background:#8b5cf6"></span> Forecast</div>
+                        <div><span class="swatch" style="background:var(--warning)"></span> Planning</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full schedule table repeated here for the schedule tab -->
+            <div th:if="${delfor.lineItemGroups != null}" th:each="lig : ${delfor.lineItemGroups}">
+                <div class="card mb-4" th:if="${lig.scheduleDetails != null && !lig.scheduleDetails.isEmpty()}">
+                    <div class="card-header">
+                        <h3>Schedule Details — Item <span th:text="${lig.lineItem != null ? lig.lineItem.itemNumber : ''}"></span></h3>
+                    </div>
+                    <div class="card-body" style="padding:0">
+                        <div class="table-wrapper" style="max-height:none;border:none;border-radius:0">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Status</th>
+                                        <th>Frequency</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Qty</th>
+                                        <th>UoM</th>
+                                        <th>Qty Qualifier</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="scc, sccStat : ${lig.scheduleDetails}"
+                                        th:with="sc=${scc.schedulingConditions}">
+                                        <td th:text="${sccStat.index + 1}"></td>
+                                        <td>
+                                            <span class="badge"
+                                                  th:classappend="${sc.deliveryPlanStatusCode == '1'} ? 'badge-success' : (${sc.deliveryPlanStatusCode == '4'} ? 'badge-warning' : 'badge-primary')">
+                                                <th:block th:switch="${sc.deliveryPlanStatusCode}">
+                                                    <th:block th:case="'1'">Firm</th:block>
+                                                    <th:block th:case="'2'">Commitment</th:block>
+                                                    <th:block th:case="'3'">Forecast</th:block>
+                                                    <th:block th:case="'4'">Planning</th:block>
+                                                    <th:block th:case="*" th:text="${sc.deliveryPlanStatusCode}"></th:block>
+                                                </th:block>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-gray">
+                                                <th:block th:switch="${sc.patternDescription}">
+                                                    <th:block th:case="'D'">Daily</th:block>
+                                                    <th:block th:case="'W'">Weekly</th:block>
+                                                    <th:block th:case="'M'">Monthly</th:block>
+                                                    <th:block th:case="null">—</th:block>
+                                                    <th:block th:case="*" th:text="${sc.patternDescription}"></th:block>
+                                                </th:block>
+                                            </span>
+                                        </td>
+                                        <td style="font-family:monospace;font-size:.78rem"
+                                            th:text="${scc.dateTimePeriods != null && !scc.dateTimePeriods.isEmpty() ? scc.dateTimePeriods.get(0).dateTimePeriodValue : '—'}"></td>
+                                        <td style="font-family:monospace;font-size:.78rem"
+                                            th:text="${scc.dateTimePeriods != null && scc.dateTimePeriods.size() > 1 ? scc.dateTimePeriods.get(1).dateTimePeriodValue : '—'}"></td>
+                                        <td style="font-weight:700;font-family:monospace"
+                                            th:text="${scc.quantities != null && !scc.quantities.isEmpty() ? scc.quantities.get(0).quantity : '—'}"></td>
+                                        <td th:text="${scc.quantities != null && !scc.quantities.isEmpty() ? scc.quantities.get(0).measureUnitQualifier : ''}"></td>
+                                        <td class="text-muted" style="font-size:.75rem"
+                                            th:text="${scc.quantities != null && !scc.quantities.isEmpty() ? scc.quantities.get(0).quantityQualifier : ''}"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!--  RAW EDI TAB                                           -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div id="panel-raw" class="viewer-panel">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Raw EDI — DELFORD96A.edi</h3>
+                    <span class="text-sm text-muted" th:text="${segmentCount} + ' segments'"></span>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="raw-edi-block" id="raw-edi-block"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!--  JSON TAB                                              -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div id="panel-json" class="viewer-panel">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Parsed JSON Output</h3>
+                    <button class="btn btn-outline btn-sm" onclick="copyJson()">&#128203; Copy</button>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="json-block" id="json-block" th:text="${jsonOutput}"></div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- Hidden data for JS -->
+<textarea id="raw-edi-data" style="display:none" th:text="${rawEdi}"></textarea>
+
+<script th:inline="javascript">
+/*<![CDATA[*/
+
+// ═══════ Tab switching ═══════
+document.querySelectorAll('.viewer-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+        document.querySelectorAll('.viewer-tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.viewer-panel').forEach(function(p) { p.classList.remove('active'); });
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+    });
+});
+
+// ═══════ Card collapse ═══════
+function toggleCard(headerEl) {
+    headerEl.classList.toggle('collapsed');
+    var body = headerEl.nextElementSibling;
+    body.classList.toggle('hidden');
+}
+
+// ═══════ Copy JSON ═══════
+function copyJson() {
+    var text = document.getElementById('json-block').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        var btn = document.querySelector('#panel-json .btn');
+        btn.textContent = '\u2713 Copied!';
+        setTimeout(function() { btn.innerHTML = '&#128203; Copy'; }, 2000);
+    });
+}
+
+// ═══════ Raw EDI rendering ═══════
+(function() {
+    var raw = document.getElementById('raw-edi-data').value;
+    var lines = raw.split('\n');
+    var html = '';
+    var segColors = {
+        'UNB': 'seg-UNB', 'UNZ': 'seg-UNZ', 'UNH': 'seg-UNH', 'UNT': 'seg-UNT',
+        'BGM': 'seg-BGM', 'DTM': 'seg-DTM', 'NAD': 'seg-NAD', 'RFF': 'seg-RFF',
+        'LIN': 'seg-LIN', 'QTY': 'seg-QTY', 'SCC': 'seg-SCC', 'IMD': 'seg-IMD',
+        'LOC': 'seg-LOC', 'CTA': 'seg-CTA', 'UNS': 'seg-UNS', 'PAC': 'seg-PAC'
+    };
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var tag = line.split('+')[0].replace(/'/g, '');
+        var colorClass = segColors[tag] || '';
+        html += '<div class="raw-line">' +
+            '<span class="raw-ln">' + (i + 1) + '</span>' +
+            '<span><span class="seg-badge ' + colorClass + '">' + escHtml(tag) + '</span> ' +
+            escHtml(line.substring(tag.length)) + '</span></div>';
+    }
+    document.getElementById('raw-edi-block').innerHTML = html;
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+})();
+
+// ═══════ Schedule bar chart ═══════
+(function() {
+    var schedules = [];
+    /*[# th:if="${delfor != null && delfor.lineItemGroups != null}"]*/
+    /*[# th:each="lig : ${delfor.lineItemGroups}"]*/
+        /*[# th:if="${lig.scheduleDetails != null}"]*/
+            /*[# th:each="scc : ${lig.scheduleDetails}"]*/
+                schedules.push({
+                    status: /*[[${scc.schedulingConditions.deliveryPlanStatusCode}]]*/ '0',
+                    freq: /*[[${scc.schedulingConditions.patternDescription}]]*/ '',
+                    startDate: /*[[${scc.dateTimePeriods != null && !scc.dateTimePeriods.isEmpty() ? scc.dateTimePeriods.get(0).dateTimePeriodValue : ''}]]*/ '',
+                    qty: parseInt(/*[[${scc.quantities != null && !scc.quantities.isEmpty() ? scc.quantities.get(0).quantity : '0'}]]*/ '0') || 0
+                });
+            /*[/]*/
+        /*[/]*/
+    /*[/]*/
+    /*[/]*/
+
+    // Update schedule count stat
+    var statEl = document.getElementById('stat-schedules');
+    if (statEl) statEl.textContent = schedules.length;
+
+    var chart = document.getElementById('bar-chart');
+    if (!chart || schedules.length === 0) return;
+
+    var maxQty = Math.max.apply(null, schedules.map(function(s) { return s.qty; }));
+    if (maxQty === 0) maxQty = 1;
+
+    var html = '';
+    for (var i = 0; i < schedules.length; i++) {
+        var s = schedules[i];
+        var h = Math.max(4, (s.qty / maxQty) * 170);
+        var cls = s.status === '1' ? 'bar-firm' :
+                  s.status === '2' ? 'bar-commit' :
+                  s.status === '3' ? 'bar-forecast' : 'bar-plan';
+        var label = s.startDate ? s.startDate.substring(4, 6) + '/' + s.startDate.substring(0, 4) : '#' + (i + 1);
+        html += '<div class="bar ' + cls + '" style="height:' + h + 'px" title="' + s.qty + ' PCE">' +
+            '<span class="bar-val">' + s.qty + '</span>' +
+            '<span class="bar-label">' + label + '</span></div>';
+    }
+    chart.innerHTML = html;
+})();
+
+/*]]>*/
+</script>
+</body>
+</html>

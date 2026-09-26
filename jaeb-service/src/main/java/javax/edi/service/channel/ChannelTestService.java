@@ -45,6 +45,9 @@ public class ChannelTestService {
     @Autowired(required = false)
     private As2CryptoService as2CryptoService;
 
+    @Autowired(required = false)
+    private Oftp2ChannelAdapter oftp2Adapter;
+
     /**
      * Test a channel's connectivity and return a result map.
      */
@@ -57,6 +60,7 @@ public class ChannelTestService {
                 case FTP:  result = testFtp(channel, start); break;
                 case AS2:  result = testAs2(channel, start); break;
                 case HTTP: result = testHttp(channel, start); break;
+                case OFTP2: result = testOftp2(channel, start); break;
                 default:   result = TestResult.failure("Unsupported protocol: " + channel.getProtocol(),
                                    System.currentTimeMillis() - start);
             }
@@ -302,6 +306,33 @@ public class ChannelTestService {
 
         } finally {
             conn.disconnect();
+        }
+    }
+
+    // ======================== OFTP2 ========================
+
+    private TestResult testOftp2(CommunicationChannel channel, long start) {
+        if (oftp2Adapter == null) {
+            return TestResult.failure("OFTP2 adapter is not available", 0);
+        }
+        try {
+            String result = oftp2Adapter.testConnection(channel);
+            long elapsed = System.currentTimeMillis() - start;
+
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("host", channel.getHost());
+            details.put("port", channel.getPort() != null ? channel.getPort() : Oftp2ChannelAdapter.DEFAULT_OFTP2_PORT);
+            details.put("localSsid", channel.getOftp2LocalSsid());
+            details.put("partnerSfid", channel.getOftp2PartnerSfid());
+            details.put("tls", channel.isOftp2UseTls());
+            details.put("compression", channel.isOftp2Compress());
+            details.put("signedEerp", channel.isOftp2RequestSignedEerp());
+
+            updateLastSuccess(channel);
+            return TestResult.success(result, elapsed, details);
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - start;
+            return TestResult.failure("OFTP2 test failed: " + e.getMessage(), elapsed);
         }
     }
 
